@@ -1,0 +1,10 @@
+
+GET {{host}}/user/detail HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}
+
+###
+
+POST {{host}}/user/detail HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}

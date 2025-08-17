@@ -40,10 +40,14 @@ exports.getDetailUser = async (req, res, next) => {
     const detailUser = await db.detailuser.findOne({ where: { uid } });
 
     if (!detailUser) {
-      return res.status(404).json({ message: 'Detail user tidak ditemukan.' });
+      return res.status(200).json({ 
+        status : false,
+        message: 'Detail user tidak ditemukan.'
+      });
     }
 
     res.status(200).json({
+      status : true,
       message: 'Detail user berhasil diambil.',
       data: detailUser
     });

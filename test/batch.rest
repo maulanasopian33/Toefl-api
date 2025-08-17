@@ -1,0 +1,9 @@
+
+GET {{host}}/batch HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}
+
+
+GET {{host}}/batch/dsad HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}

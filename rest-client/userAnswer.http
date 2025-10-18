@@ -1,0 +1,15 @@
+### Get All User Answers
+GET {{host}}/answers HTTP/1.1
+Authorization: Bearer {{token}}
+
+###
+### Create User Answer
+POST {{host}}/answers HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "userId": "USR001",
+  "questionId": "Q001",
+  "optionId": "OPT001"
+}

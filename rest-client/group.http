@@ -1,0 +1,15 @@
+### Get All Groups
+GET {{host}}/groups HTTP/1.1
+Authorization: Bearer {{token}}
+
+###
+### Create Group
+POST {{host}}/groups HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "idGroup": "GRP006",
+  "sectionId": "SEC001",
+  "namaGroup": "Listening Part A"
+}

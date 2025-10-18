@@ -1,0 +1,23 @@
+### Get All User Results
+GET {{host}}/results HTTP/1.1
+Authorization: Bearer {{token}}
+
+###
+### Get User Result by Batch
+GET {{host}}/results/batch/BATCH001 HTTP/1.1
+Authorization: Bearer {{token}}
+
+###
+### Create User Result
+POST {{host}}/results HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "userId": "USR001",
+  "batchId": "BATCH001",
+  "totalQuestions": 50,
+  "correctCount": 40,
+  "wrongCount": 10,
+  "score": 80
+}

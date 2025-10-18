@@ -1,0 +1,15 @@
+### Get All Sections
+GET {{host}}/sections HTTP/1.1
+Authorization: Bearer {{token}}
+
+###
+### Create Section
+POST {{host}}/sections HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "idSection": "SEC001",
+  "batchId": "BATCH001",
+  "namaSection": "Listening"
+}

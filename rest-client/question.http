@@ -1,0 +1,15 @@
+### Get All Questions
+GET {{host}}/questions HTTP/1.1
+Authorization: Bearer {{token}}
+
+###
+### Create Question
+POST {{host}}/questions HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "idQuestion": "Q001",
+  "groupId": "GRP001",
+  "text": "What does the man mean?"
+}

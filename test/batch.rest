@@ -3,7 +3,28 @@ GET {{host}}/batch HTTP/1.1
 content-type: application/json
 Authorization: Bearer {{token}}
 
+###
+GET {{host}}/batch/BATCH2314 HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}
 
-GET {{host}}/batch/dsad HTTP/1.1
+
+###
+DELETE {{host}}/batch/BATCH2392 HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}
+
+###
+POST {{host}}/participants/join HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "userId" : "VXOXJbZHMZO7PGCAuHfTZEXniV32",
+    "batchId" : "BATCH2314"
+}
+
+###
+GET {{host}}/participants HTTP/1.1
 content-type: application/json
 Authorization: Bearer {{token}}

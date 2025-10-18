@@ -9,6 +9,18 @@ const usersRouter = require('./routes/users');
 const authRouter = require('./routes/auth');
 const detailUserRouter = require('./routes/detailUser');
 const batchRouter = require('./routes/batchRoutes');
+const batchParticipantRoutes = require('./routes/batchParticipant');
+const paymentRoutes = require('./routes/payment');
+const resultRoutes = require('./routes/resultRoutes');
+const questionRoutes = require('./routes/questionRoutes');
+const optionRoutes = require('./routes/optionRoutes');
+const userAnswerRoutes = require('./routes/userAnswerRoutes');
+const userResultRoutes = require('./routes/userResultRoutes');
+const groupRoutes = require('./routes/groupRoutes');
+const sectionRoutes = require('./routes/sectionRoutes');
+const groupAudioInstructionRoutes = require("./routes/groupAudioInstructionRoutes");
+const adminStatsRoutes = require('./routes/adminStats');
+
 const app = express();
 const cors = require('cors');
 const corsOptions = require('./config/cors');
@@ -30,6 +42,17 @@ app.use('/users', usersRouter);
 app.use('/auth', authRouter);
 app.use('/user/detail', detailUserRouter);
 app.use('/batch', batchRouter);
+app.use('/participants', batchParticipantRoutes);
+app.use('/payments', paymentRoutes);
+app.use('/results', resultRoutes);
+app.use('/questions', questionRoutes);
+app.use('/options', optionRoutes);
+app.use('/answers', userAnswerRoutes);
+app.use('/results', userResultRoutes);
+app.use('/groups', groupRoutes);
+app.use('/sections', sectionRoutes);
+app.use("/audio-instructions", groupAudioInstructionRoutes);
+app.use('/admin', adminStatsRoutes);
 
 // Middleware untuk menangani route yang tidak ditemukan (404 Not Found)
 app.use((req, res, next) => {

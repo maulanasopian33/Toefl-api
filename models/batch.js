@@ -10,7 +10,11 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      this.hasMany(models.batchParticipant, { foreignKey: 'batchId', as: 'participants' });
+      this.hasMany(models.section, { foreignKey: "batchId", as: "sections" });
+      this.hasMany(models.group, { foreignKey: "batchId", as: "groups" });
+      this.hasMany(models.userResult, { foreignKey: "batchId", as: "results" });
+      this.hasMany(models.userAnswer, { foreignKey: "batchId", as: "answers" });
     }
   }
   batch.init({

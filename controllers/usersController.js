@@ -68,7 +68,7 @@ exports.getUserByUid = async (req, res) => {
   try {
     const user = await db.user.findOne({
       where: { uid: uid },
-      include: [{ model: db.userdetail }] // Sertakan data UserDetail
+      include: [{ model: db.detailuser }] // Sertakan data UserDetail
     });
     if (!user) {
       return res.status(404).json({ 

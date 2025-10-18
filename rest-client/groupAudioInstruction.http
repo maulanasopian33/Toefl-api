@@ -1,0 +1,20 @@
+### Get audios by group
+GET {{host}}/audio-instructions/group/GRP001
+Authorization: Bearer {{token}}
+
+### Create audio instruction
+POST {{host}}/audio-instructions
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "idInstruction": "AI001",
+  "groupId": "GRP001",
+  "audioUrl": "https://storage.example.com/audio/intro1.mp3",
+  "description": "Instruksi pertama",
+  "order": 1
+}
+
+### Delete audio instruction
+DELETE {{host}}/audio-instructions/AI001
+Authorization: Bearer {{token}}

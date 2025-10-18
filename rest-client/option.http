@@ -1,0 +1,16 @@
+### Get All Options
+GET {{host}}/options HTTP/1.1
+Authorization: Bearer {{token}}
+
+###
+### Create Option
+POST {{host}}/options HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "idOption": "OPT006",
+  "questionId": "Q001",
+  "text": "He is too busy.",
+  "isCorrect": true
+}

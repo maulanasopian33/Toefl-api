@@ -1,6 +1,7 @@
 // controllers/batchController.js
 
 const db = require('../models');
+const { generateProfilePic } = require('../utils/profilePic');
 
 // CREATE: Menambahkan batch baru (hanya admin)
 exports.createBatch = async (req, res, next) => {
@@ -33,17 +34,41 @@ exports.getAllBatches = async (req, res, next) => {
 // READ: Mendapatkan satu batch berdasarkan idBatch
 exports.getBatchById = async (req, res, next) => {
   try {
-    const batch = await db.batch.findByPk(req.params.idBatch); // Gunakan findByPk
+    const batch = await db.batch.findAll({
+      where: {
+        idBatch: req.params.idBatch
+      },
+      include : [
+        { model: db.batchParticipant , as: "participants", include: [{ model: db.user, as: "user" }] }
+      ]
+    });
     if (!batch) {
       return res.status(404).json({ 
-        status : false,
-        message: 'Batch tidak ditemukan.'
-    });
+          status : false,
+          message: 'Batch tidak ditemukan.'
+      });
     }
+    const plainBatches = batch.map(b => b.toJSON());
+    const formatedBatch = plainBatches.map((batch) => {
+      return {
+        ...batch,
+        participants: batch.participants.map((participant) => {
+          let picture = `http://localhost:5000${participant.user.picture}`
+          if (!participant.user.picture) {
+            picture = generateProfilePic(participant.user.name || participant.user.email)
+          }
+          return {
+            name: participant.user.name,
+            profilePic: picture,
+          };
+        }),
+      };
+    });
+
     res.status(200).json({
-        status : true,
+      status : true,
       message: 'Batch berhasil diambil.',
-      data: batch
+      data: formatedBatch[0]
     });
   } catch (error) {
     next(error);

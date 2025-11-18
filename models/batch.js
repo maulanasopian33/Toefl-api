@@ -1,7 +1,8 @@
 'use strict';
 const {
   Model
-} = require('sequelize');
+} = require('sequelize'); 
+const { logger } = require('../utils/logger');
 module.exports = (sequelize, DataTypes) => {
   class batch extends Model {
     /**
@@ -32,7 +33,38 @@ module.exports = (sequelize, DataTypes) => {
     intruksiKhusus: DataTypes.TEXT
   }, {
     sequelize,
-    modelName: 'batch',
+    modelName: 'batch', 
+    hooks: {
+      afterCreate: (instance, options) => {
+        logger.info({
+          message: `Batch created with ID: ${instance.idBatch}`,
+          action: 'CREATE_BATCH',
+          user: options.user ? options.user.email : 'system',
+          details: {
+            data: instance.toJSON()
+          }
+        });
+      },
+      afterUpdate: (instance, options) => {
+        logger.info({
+          message: `Batch updated with ID: ${instance.idBatch}`,
+          action: 'UPDATE_BATCH',
+          user: options.user ? options.user.email : 'system',
+          details: {
+            batchId: instance.idBatch,
+            updatedFields: instance.changed() || Object.keys(options.fields)
+          }
+        });
+      },
+      afterDestroy: (instance, options) => {
+        logger.info({
+          message: `Batch deleted with ID: ${instance.idBatch}`,
+          action: 'DELETE_BATCH',
+          user: options.user ? options.user.email : 'system',
+          details: { batchId: instance.idBatch }
+        });
+      }
+    }
   });
   return batch;
 };

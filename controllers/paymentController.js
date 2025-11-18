@@ -63,16 +63,7 @@ module.exports = {
         }
       }
 
-      await payment.save();
-
-      // Logging perubahan status
-      logger.info({
-        message: `Payment status updated for ID ${id}`,
-        action: 'UPDATE_STATUS',
-        paymentId: id,
-        user: req.user.email,
-        details: { newStatus: status }
-      });
+      await payment.save({ user: req.user });
 
       res.json({
         status: true,
@@ -103,16 +94,7 @@ module.exports = {
         payment.paid_at = status === 'paid' ? new Date() : null;
       }
 
-      await payment.save();
-
-      // Logging perubahan data dalam format JSON terstruktur
-      logger.info({
-        message: `Payment data updated for ID ${id}`,
-        action: 'UPDATE_PAYMENT',
-        paymentId: id,
-        user: req.user.email,
-        details: { updatedData: req.body }
-      });
+      await payment.save({ user: req.user });
 
       res.json({
         status: true,

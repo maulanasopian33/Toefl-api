@@ -2,6 +2,7 @@
 const {
   Model
 } = require('sequelize');
+const { logger } = require('../utils/logger');
 module.exports = (sequelize, DataTypes) => {
   class payment extends Model {
     /**
@@ -23,6 +24,35 @@ module.exports = (sequelize, DataTypes) => {
   }, {
     sequelize,
     modelName: 'payment',
+    hooks: {
+      afterCreate: (instance, options) => {
+        logger.info({
+          message: `Payment created with ID: ${instance.id}`,
+          action: 'CREATE_PAYMENT',
+          user: options.user ? options.user.email : 'system',
+          details: { data: instance.toJSON() }
+        });
+      },
+      afterUpdate: (instance, options) => {
+        logger.info({
+          message: `Payment updated with ID: ${instance.id}`,
+          action: 'UPDATE_PAYMENT',
+          user: options.user ? options.user.email : 'system',
+          details: {
+            paymentId: instance.id,
+            updatedFields: instance.changed() || Object.keys(options.fields || {})
+          }
+        });
+      },
+      afterDestroy: (instance, options) => {
+        logger.info({
+          message: `Payment deleted with ID: ${instance.id}`,
+          action: 'DELETE_PAYMENT',
+          user: options.user ? options.user.email : 'system',
+          details: { paymentId: instance.id }
+        });
+      }
+    }
   });
   return payment;
 };

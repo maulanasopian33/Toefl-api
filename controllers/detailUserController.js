@@ -1,6 +1,7 @@
 // controllers/detailUserController.js
 
 const db = require('../models');
+const { logger } = require('../utils/logger');
 
 // CREATE: Menyimpan data DetailUser saat pertama kali login
 exports.createDetailUser = async (req, res, next) => {
@@ -21,7 +22,7 @@ exports.createDetailUser = async (req, res, next) => {
       nim,
       fakultas,
       prodi,
-    });
+    }, { user: req.user });
 
     res.status(201).json({
       message: 'Detail user berhasil dibuat.',
@@ -69,7 +70,7 @@ exports.updateDetailUser = async (req, res, next) => {
     }
 
     // Update data
-    await detailUser.update({ namaLengkap, nim, fakultas, prodi });
+    await detailUser.update({ namaLengkap, nim, fakultas, prodi }, { user: req.user });
 
     res.status(200).json({
       message: 'Detail user berhasil diperbarui.',
@@ -91,7 +92,7 @@ exports.deleteDetailUser = async (req, res, next) => {
       return res.status(404).json({ message: 'Detail user tidak ditemukan.' });
     }
 
-    await detailUser.destroy();
+    await detailUser.destroy({ user: req.user });
 
     res.status(200).json({ message: 'Detail user berhasil dihapus.' });
   } catch (error) {

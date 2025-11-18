@@ -1,8 +1,9 @@
 const db = require('../models');
 const { v4: uuidv4 } = require('uuid');
+const { logger } = require('../utils/logger');
 
 module.exports = {
-  async joinBatch(req, res) {
+  async joinBatch(req, res, next) {
     try {
       const { userId, batchId } = req.body;
 
@@ -19,7 +20,7 @@ module.exports = {
         id: uuidv4(),
         batchId,
         userId,
-      });
+      }, { user: req.user });
 
       // Create payment otomatis
       const payment = await db.payment.create({
@@ -40,7 +41,7 @@ module.exports = {
     }
   },
 
-  async getParticipants(req, res) {
+  async getParticipants(req, res, next) {
     try {
       const participants = await db.batchParticipant.findAll({
         include: [

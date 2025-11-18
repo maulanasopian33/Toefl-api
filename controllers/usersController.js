@@ -1,6 +1,7 @@
 
 const db = require('../models')
 const { downloadImage } = require('../utils/imageDownloader');
+const { logger } = require('../utils/logger');
 
 exports.handleLogin = async (req, res, next) => {
   try {
@@ -16,7 +17,8 @@ exports.handleLogin = async (req, res, next) => {
         email_verified: email_verified,
         picture: localPicturePath,
         lastLogin: new Date(auth_time * 1000) // Convert seconds to milliseconds
-      }
+      },
+      user: req.user // Pass user for hooks
     });
 
     // If the user already exists, update their data
@@ -26,9 +28,16 @@ exports.handleLogin = async (req, res, next) => {
         name: name,
         email_verified: email_verified,
         picture: localPicturePath,
-        lastLogin: new Date(auth_time * 1000)
-      });
+        lastLogin: new Date(auth_time * 1000),
+      }, { user: req.user });
     }
+
+    logger.info({
+      message: `User login successful: ${email}`,
+      action: created ? 'USER_CREATED' : 'USER_LOGIN',
+      user: email,
+      details: { uid }
+    });
 
     res.status(200).json({
       status: true,

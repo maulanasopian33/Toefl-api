@@ -3,6 +3,7 @@
 const { Op } = require('sequelize');
 const db = require('../models');
 const { sequelize } = require('../models');
+const { logger } = require('../utils/logger');
 
 /**
  * Mengambil seluruh data ujian (sections, groups, questions, options)
@@ -217,6 +218,12 @@ exports.updateExamData = async (req, res, next) => {
     }
 
     await transaction.commit();
+    logger.info({
+      message: `Exam data updated for batch ID: ${batchId}`,
+      action: 'UPDATE_EXAM_DATA',
+      user: req.user.email,
+      details: { batchId }
+    });
     res.status(200).json({ message: `Data ujian untuk batch ${batchId} berhasil diperbarui.` });
   } catch (error) {
     await transaction.rollback();

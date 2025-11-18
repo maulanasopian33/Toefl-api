@@ -2,11 +2,12 @@
 
 const db = require('../models');
 const { generateProfilePic } = require('../utils/profilePic');
+const { logger } = require('../utils/logger');
 
 // CREATE: Menambahkan batch baru (hanya admin)
 exports.createBatch = async (req, res, next) => {
   try {
-    const newBatch = await db.batch.create(req.body);
+    const newBatch = await db.batch.create(req.body, { user: req.user });
     res.status(201).json({
         status : true,
         message: 'Batch berhasil dibuat.',
@@ -82,7 +83,7 @@ exports.updateBatch = async (req, res, next) => {
     if (!batch) {
       return res.status(404).json({ status :false, message: 'Batch tidak ditemukan.' });
     }
-    await batch.update(req.body);
+    await batch.update(req.body, { user: req.user });
     res.status(200).json({
         status : false,
       message: 'Batch berhasil diperbarui.',
@@ -100,7 +101,7 @@ exports.deleteBatch = async (req, res, next) => {
     if (!batch) {
       return res.status(404).json({ status:false,message: 'Batch tidak ditemukan.' });
     }
-    await batch.destroy();
+    await batch.destroy({ user: req.user });
     res.status(200).json({ status:true, message: 'Batch berhasil dihapus.' });
   } catch (error) {
     next(error);

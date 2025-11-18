@@ -2,6 +2,7 @@
 const {
   Model
 } = require('sequelize');
+const { logger } = require('../utils/logger');
 module.exports = (sequelize, DataTypes) => {
   class user extends Model {
     /**
@@ -51,6 +52,32 @@ module.exports = (sequelize, DataTypes) => {
   }, {
     sequelize,
     modelName: 'user',
+    hooks: {
+      afterCreate: (instance, options) => {
+        // The login controller handles the 'USER_CREATED' log,
+        // as it has more context (login vs registration).
+        // This hook is for other creation paths if any.
+        logger.info({
+          message: `User account created: ${instance.email}`,
+          action: 'CREATE_USER',
+          user: options.user ? options.user.email : 'system',
+          details: { uid: instance.uid }
+        });
+      },
+      afterUpdate: (instance, options) => {
+        // The login controller handles the 'USER_LOGIN' log.
+        // This hook will catch other updates, e.g., role change by an admin.
+        logger.info({
+          message: `User account updated: ${instance.email}`,
+          action: 'UPDATE_USER',
+          user: options.user ? options.user.email : 'system',
+          details: {
+            uid: instance.uid,
+            updatedFields: instance.changed() || Object.keys(options.fields || {})
+          }
+        });
+      }
+    }
   });
   return user;
 };

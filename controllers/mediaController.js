@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const db = require('../models');
 const { Op } = require('sequelize');
+const { logger } = require('../utils/logger');
 
 /**
  * Mengelola unggahan file media.
@@ -24,7 +25,7 @@ exports.uploadFile = async (req, res, next) => {
       mimeType: req.file.mimetype,
       size: req.file.size,
       url: fileUrl,
-    });
+    }, { user: req.user });
 
     res.json({
       status: true,
@@ -87,7 +88,7 @@ exports.deleteMedia = async (req, res, next) => {
     }
 
     // Hapus record dari database
-    await media.destroy();
+    await media.destroy({ user: req.user });
 
     res.status(200).json({ status: true, message: 'Media berhasil dihapus.' });
   } catch (error) {

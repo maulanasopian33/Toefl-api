@@ -5,5 +5,6 @@ const adminStatsController = require('../controllers/adminStatsController');
 // const { authAdmin } = require('../middleware/authMiddleware');
 
 router.get('/stats', /*authAdmin,*/ adminStatsController.getStats);
+router.get('/financial-recap', /*authAdmin,*/ adminStatsController.getFinancialRecap);
 
 module.exports = router;

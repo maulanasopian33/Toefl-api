@@ -6,6 +6,8 @@ const checkAuth = require('../middlewares/authMiddleware');
 const checkRole = require('../middlewares/checkRole');
 
 router.get('/', checkAuth, checkRole(['admin']), controller.getAllPayments);
+router.get('/batch/:batchId', controller.getPaymentsByBatch); // Route baru
+router.post('/', checkAuth, checkRole(['admin']), controller.createManualPayment);
 
 router.put('/:id', checkAuth, checkRole(['admin']), controller.updatePayment); // Route baru untuk edit
 router.patch('/:id/status', checkAuth, checkRole(['admin']), controller.updatePaymentStatus); // Route lama tetap ada jika masih digunakan

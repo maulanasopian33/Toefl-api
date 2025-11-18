@@ -6,13 +6,25 @@ const { logger } = require('../utils/logger');
 module.exports = {
   async getAllPayments(req, res, next) {
     try {
-      const { page = 1, limit = 10, search = '' } = req.query;
+      const { page = 1, limit = 10, search = '', status, startDate, endDate, batchId } = req.query;
       const offset = (page - 1) * limit;
 
+      // Build where conditions dynamically
+      const wherePayment = {};
+      if (status) wherePayment.status = status;
+      if (startDate && endDate) {
+        wherePayment.createdAt = { [Op.between]: [new Date(startDate), new Date(endDate)] };
+      }
+
+      const whereParticipant = {};
+      if (batchId) whereParticipant.batchId = batchId;
+
       const { count, rows } = await db.payment.findAndCountAll({
+        where: wherePayment,
         include: [{
           model: db.batchParticipant,
           as: 'participant',
+          where: whereParticipant,
           include: [
             {
               model: db.user,
@@ -43,6 +55,118 @@ module.exports = {
       next(error);
     }
   },
+
+  async getPaymentsByBatch(req, res, next) {
+    try {
+      const { batchId } = req.params;
+      const { page = 1, limit = 10, search = '' } = req.query;
+      const offset = (page - 1) * limit;
+
+      const { count, rows } = await db.payment.findAndCountAll({
+        include: [{
+          model: db.batchParticipant,
+          as: 'participant',
+          where: { batchId: batchId }, // Filter berdasarkan batchId
+          include: [
+            {
+              model: db.user,
+              as: 'user',
+              where: search ? { name: { [Op.like]: `%${search}%` } } : {},
+              attributes: ['name', 'email'],
+              required: true
+            }
+          ],
+          required: true
+        }],
+        limit: parseInt(limit, 10),
+        offset: parseInt(offset, 10),
+        order: [['createdAt', 'DESC']]
+      });
+
+      res.status(200).json({
+        status: true, message: `Berhasil mengambil pembayaran untuk batch ${batchId}.`, data: rows, totalItems: count, totalPages: Math.ceil(count / limit), currentPage: parseInt(page, 10)
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async createManualPayment(req, res, next) {
+    try {
+      const { userId, batchId, amount, status, method } = req.body;
+
+      // 1. Validasi input
+      if (!userId || !batchId || !amount || !status || !method) {
+        return res.status(400).json({
+          status: false,
+          message: 'userId, batchId, amount, status, dan method wajib diisi.'
+        });
+      }
+
+      // 2. Cek apakah peserta sudah terdaftar di batch
+      let participant = await db.batchParticipant.findOne({ where: { userId, batchId } });
+
+      // 3. Jika peserta belum ada, daftarkan dulu
+      if (!participant) {
+        const batch = await db.batch.findByPk(batchId);
+        if (!batch) return res.status(404).json({ status: false, message: 'Batch not found' });
+
+        participant = await db.batchParticipant.create({
+          id: uuidv4(),
+          batchId,
+          userId,
+        }, { user: req.user });
+      }
+
+      // 4. Cek apakah sudah ada pembayaran, jika ada, update. Jika tidak, buat baru.
+      // Logika ini mencegah duplikasi pembayaran jika joinBatch sudah dipanggil sebelumnya.
+      const [payment, isCreated] = await db.payment.findOrCreate({
+        where: { participantId: participant.id },
+        defaults: {
+          id: uuidv4(),
+          participantId: participant.id,
+          amount,
+          status,
+          method,
+          paid_at: status === 'paid' ? new Date() : null,
+        },
+        user: req.user
+      });
+
+      if (!isCreated) {
+        // Jika pembayaran sudah ada, update saja
+        await payment.update({
+          amount,
+          status,
+          method,
+          paid_at: status === 'paid' ? new Date() : (status === 'pending' ? null : payment.paid_at),
+        }, { user: req.user });
+      }
+
+      res.status(isCreated ? 201 : 200).json({
+        status: true,
+        message: `Pembayaran manual berhasil ${isCreated ? 'dibuat' : 'diperbarui'}.`,
+        data: payment
+      });
+
+      /*
+      // --- Kode Lama yang berpotensi duplikat ---
+      const newPayment = await db.payment.create({
+        id: uuidv4(),
+        participantId,
+        amount,
+        status,
+        method,
+        paid_at: status === 'paid' ? new Date() : null,
+      }, { user: req.user }); // Melewatkan user untuk logging hook
+
+      res.status(201).json({ status: true, message: 'Pembayaran manual berhasil ditambahkan.', data: newPayment });
+      */
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async updatePaymentStatus(req, res, next) {
     try {
       const { id } = req.params;

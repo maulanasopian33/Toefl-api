@@ -13,7 +13,7 @@ router.post('/', checkAuth, checkRole(['admin']), batchController.createBatch);
 router.get('/', checkAuth, batchController.getAllBatches);
 
 // READ: Semua pengguna yang sudah login bisa melihat detail batch tertentu
-router.get('/:idBatch', checkAuth, batchController.getBatchById); // Perbarui parameter
+router.get('/:idBatch', batchController.getBatchById); // Perbarui parameter
 
 // UPDATE: Hanya admin yang bisa mengubah data batch
 router.put('/:idBatch', checkAuth, checkRole(['admin']), batchController.updateBatch); // Perbarui parameter

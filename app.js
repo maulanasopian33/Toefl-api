@@ -2,7 +2,7 @@ const createError = require('http-errors');
 const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
-const logger = require('morgan');
+const morgan = require('morgan');
 
 const indexRouter = require('./routes/index');
 const usersRouter = require('./routes/users');
@@ -20,6 +20,10 @@ const groupRoutes = require('./routes/groupRoutes');
 const sectionRoutes = require('./routes/sectionRoutes');
 const groupAudioInstructionRoutes = require("./routes/groupAudioInstructionRoutes");
 const adminStatsRoutes = require('./routes/adminStats');
+const examRoutes = require('./routes/examRoutes');
+const mediaRoutes = require('./routes/mediaRoutes');
+const logRoutes = require('./routes/logRoutes');
+const { httpLogger } = require('./utils/logger');
 
 const app = express();
 const cors = require('cors');
@@ -31,7 +35,10 @@ const errorHandler = require('./middlewares/errorHandler');
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 app.use(cors(corsOptions));
-app.use(logger('dev'));
+
+// Gunakan morgan untuk HTTP request logging dan arahkan outputnya ke Winston
+app.use(morgan('combined', { stream: httpLogger.stream }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
@@ -53,6 +60,9 @@ app.use('/groups', groupRoutes);
 app.use('/sections', sectionRoutes);
 app.use("/audio-instructions", groupAudioInstructionRoutes);
 app.use('/admin', adminStatsRoutes);
+app.use('/exams', examRoutes);
+app.use('/media', mediaRoutes);
+app.use('/logs', logRoutes);
 
 // Middleware untuk menangani route yang tidak ditemukan (404 Not Found)
 app.use((req, res, next) => {

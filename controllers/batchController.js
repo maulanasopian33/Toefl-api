@@ -40,7 +40,14 @@ exports.getBatchById = async (req, res, next) => {
         idBatch: req.params.idBatch
       },
       include : [
-        { model: db.batchParticipant , as: "participants", include: [{ model: db.user, as: "user" }] }
+        { 
+          model: db.batchParticipant , 
+          as: "participants", 
+          include: [
+            { model: db.user, as: "user", attributes: ['name', 'email', 'picture'] },
+            { model: db.payment, as: 'payments' } // Tambahkan ini untuk menyertakan data pembayaran
+          ] 
+        }
       ]
     });
     if (!batch) {
@@ -61,6 +68,7 @@ exports.getBatchById = async (req, res, next) => {
           return {
             name: participant.user.name,
             profilePic: picture,
+            ...participant // Sertakan sisa data participant, termasuk pembayaran
           };
         }),
       };

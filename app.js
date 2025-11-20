@@ -23,6 +23,8 @@ const adminStatsRoutes = require('./routes/adminStats');
 const examRoutes = require('./routes/examRoutes');
 const mediaRoutes = require('./routes/mediaRoutes');
 const logRoutes = require('./routes/logRoutes');
+const settingRoutes = require('./routes/settingRoutes');
+
 const { httpLogger } = require('./utils/logger');
 
 const app = express();
@@ -63,6 +65,7 @@ app.use('/admin', adminStatsRoutes);
 app.use('/exams', examRoutes);
 app.use('/media', mediaRoutes);
 app.use('/logs', logRoutes);
+app.use('/settings', settingRoutes);
 
 // Middleware untuk menangani route yang tidak ditemukan (404 Not Found)
 app.use((req, res, next) => {

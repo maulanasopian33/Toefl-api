@@ -267,3 +267,46 @@ exports.deleteUser = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.getJoinedBatches = async (req, res, next) => {
+  try {
+    const { uid } = req.user; // Dapatkan UID dari pengguna yang sedang login
+
+    const participations = await db.batchParticipant.findAll({
+      where: { userId: uid },
+      include: [
+        {
+          model: db.batch,
+          as: 'batch', // Sertakan detail batch
+        },
+        {
+          model: db.payment,
+          as: 'payments', // Sertakan detail pembayaran
+        }
+      ],
+      order: [[{ model: db.batch, as: 'batch' }, 'createdAt', 'DESC']] // Urutkan berdasarkan batch terbaru
+    });
+
+    if (!participations || participations.length === 0) {
+      return res.status(200).json({
+        status: true,
+        message: 'Anda belum bergabung dengan batch manapun.',
+        data: []
+      });
+    }
+
+    // Format data agar lebih mudah digunakan di frontend
+    const joinedBatches = participations.map(p => ({
+      ...p.batch.toJSON(),
+      paymentStatus: p.payments.length > 0 ? p.payments[0].status : 'not_started',
+    }));
+
+    res.status(200).json({
+      status: true,
+      message: 'Berhasil mengambil daftar batch yang telah diikuti.',
+      data: joinedBatches
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -25,6 +25,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
     },
     namaBatch: DataTypes.STRING,
+    price: DataTypes.DECIMAL,
     deskripsiBatch: DataTypes.TEXT,
     tanggalMulai: DataTypes.DATE,
     tanggalSelesai: DataTypes.DATE,

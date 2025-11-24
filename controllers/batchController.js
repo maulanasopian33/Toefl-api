@@ -21,11 +21,33 @@ exports.createBatch = async (req, res, next) => {
 // READ: Mendapatkan semua batch
 exports.getAllBatches = async (req, res, next) => {
   try {
-    const allBatches = await db.batch.findAll();
+    const { uid } = req.user; // Dapatkan UID pengguna yang sedang login
+
+    // 1. Ambil semua batch yang tersedia, urutkan dari yang terbaru
+    const allBatches = await db.batch.findAll({
+      order: [['createdAt', 'DESC']]
+    });
+
+    // 2. Ambil semua ID batch yang sudah diikuti oleh pengguna
+    const userParticipations = await db.batchParticipant.findAll({
+      where: { userId: uid },
+      attributes: ['batchId']
+    });
+    const joinedBatchIds = new Set(userParticipations.map(p => p.batchId));
+
+    // 3. Tambahkan status 'isJoined' ke setiap batch
+    const batchesWithStatus = allBatches.map(batch => {
+      const batchJSON = batch.toJSON();
+      return {
+        ...batchJSON,
+        isJoined: joinedBatchIds.has(batchJSON.idBatch)
+      };
+    });
+
     res.status(200).json({
-        status : true,
+      status: true,
       message: 'Semua batch berhasil diambil.',
-      data: allBatches
+      data: batchesWithStatus
     });
   } catch (error) {
     next(error);

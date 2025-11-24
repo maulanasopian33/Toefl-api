@@ -9,7 +9,7 @@
 /dist
 /build
 /lib
-
+/logs/*
 # Logs
 # Abaikan file log yang dihasilkan oleh aplikasi atau package manager
 logs

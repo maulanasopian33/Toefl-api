@@ -34,18 +34,32 @@ exports.handleLogin = async (req, res, next) => {
       }, { user: req.user });
     }
 
+    // --- PERBAIKAN: Sinkronkan role dari DB ke Firebase Custom Claim ---
+    // Ini memastikan token pengguna selalu memiliki claim role yang up-to-date.
+    await admin.auth().setCustomUserClaims(uid, { role: user.role });
+    // if (user.role) {
+    //   // Cek apakah claim yang ada sekarang berbeda dengan yang di DB
+    //   // Ini untuk menghindari pemanggilan yang tidak perlu
+    //   if (req.user.role !== user.role) {
+    //   }
+    // }
+    
+    // Buat objek user yang akan dikirim sebagai respons, pastikan role-nya benar
+    const responseUser = { ...req.user, role: user.role };
+    
     logger.info({
       message: `User login successful: ${email}`,
       action: created ? 'USER_CREATED' : 'USER_LOGIN',
       user: email,
-      details: { uid }
+      details: { 
+        ...responseUser
+       }
     });
 
     res.status(200).json({
       status: true,
       message: 'Login successful',
-      role: user.role,
-      data: req.user,
+      data: responseUser, // Kirim data user yang sudah diperbarui dengan role dari DB
     });
   } catch (error) {
     next(error);
@@ -197,6 +211,9 @@ exports.changeUserRole = async (req, res, next) => {
     // 4. Set custom claim di Firebase Authentication
     await admin.auth().setCustomUserClaims(uid, { role: newRole });
 
+    // 5. Cabut semua sesi aktif pengguna untuk memaksa login ulang
+    await admin.auth().revokeRefreshTokens(uid);
+    
     logger.info({
       message: `User role for UID ${uid} changed to ${newRole}.`,
       action: 'USER_ROLE_CHANGED',

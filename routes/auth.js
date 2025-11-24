@@ -6,4 +6,7 @@ const checkAuth = require('../middlewares/authMiddleware');
 const userController = require('../controllers/usersController');
 router.post('/login', checkAuth, userController.handleLogin);
 
+// Tambahkan rute alias untuk register yang menggunakan controller yang sama dengan login
+router.post('/register', checkAuth, userController.handleLogin);
+
 module.exports = router;

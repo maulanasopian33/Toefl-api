@@ -1,37 +1,52 @@
 // controllers/detailUserController.js
 
 const db = require('../models');
-const { logger } = require('../utils/logger');
 
-// CREATE: Menyimpan data DetailUser saat pertama kali login
-exports.createDetailUser = async (req, res, next) => {
+/**
+ * Membuat atau Memperbarui (Upsert) data DetailUser.
+ * Jika data sudah ada, akan diperbarui. Jika belum, akan dibuat.
+ */
+exports.upsertDetailUser = async (req, res, next) => {
   try {
     const { namaLengkap, nim, fakultas, prodi } = req.body;
-    const { uid, email } = req.user; // uid dan email dari token yang sudah diverifikasi
+    const { uid } = req.user; // uid dari token yang sudah diverifikasi
+    const { email, name, auth_time } = req.user; // Ambil email, name, dan auth_time dari token
 
-    // Pastikan hanya satu entri per pengguna
-    const existingDetail = await db.detailuser.findOne({ where: { uid } });
-    if (existingDetail) {
-      return res.status(409).json({ message: 'Detail user sudah ada. Gunakan update.' });
+    // --- SOLUSI: Pastikan user ada di tabel 'users' sebelum melanjutkan ---
+    // Ini mencegah foreign key constraint error jika handleLogin belum dipanggil.
+    await db.user.findOrCreate({
+      where: { uid: uid },
+      defaults: {
+        uid: uid,
+        email: email,
+        name: name || email, // Gunakan nama dari token atau email sebagai fallback
+        role: 'user', // Atur role default jika user baru dibuat
+        lastLogin: new Date(auth_time * 1000) // Tambahkan lastLogin dari auth_time token
+      }
+    });
+
+    // Menggunakan findOrCreate untuk mencari atau membuat entri baru
+    const [detail, created] = await db.detailuser.findOrCreate({
+      where: { uid },
+      defaults: { uid, namaLengkap, nim, fakultas, prodi },
+      user: req.user // Untuk logging hook
+    });
+ 
+    if (!created) {
+      // Jika data sudah ada (tidak dibuat), perbarui dengan data baru
+      await detail.update({ namaLengkap, nim, fakultas, prodi }, { user: req.user });
     }
-
-    // Buat entri baru di tabel DetailUser
-    const newDetail = await db.detailuser.create({
-      uid,
-      namaLengkap,
-      nim,
-      fakultas,
-      prodi,
-    }, { user: req.user });
-
-    res.status(201).json({
-      message: 'Detail user berhasil dibuat.',
-      data: newDetail
+ 
+    res.status(created ? 201 : 200).json({
+      status: true,
+      message: `Detail user berhasil ${created ? 'dibuat' : 'diperbarui'}.`,
+      data: detail
     });
   } catch (error) {
     next(error);
   }
 };
+// Fungsi createDetailUser yang lama bisa dihapus atau diganti namanya jika masih diperlukan di tempat lain.
 
 // READ: Mendapatkan data DetailUser milik pengguna yang sedang login
 exports.getDetailUser = async (req, res, next) => {

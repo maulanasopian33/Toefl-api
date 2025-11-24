@@ -7,16 +7,19 @@ const checkAuth = async (req, res, next) => {
       // 1. Verifikasi token dari Firebase
       const decodedToken = await admin.auth().verifyIdToken(idToken);
 
-      // 2. Cari pengguna di database MySQL berdasarkan Firebase UID
-      const user = await db.user.findOne({ where: { uid: decodedToken.uid } });
-
-      // 3. Gabungkan data dari token dan database
+      // 2. Jadikan decodedToken sebagai dasar untuk req.user
       req.user = {
         ...decodedToken,
       };
       
-      if (user) {
-        req.user['role'] = user.role  
+      // 3. Prioritaskan custom claim 'role' dari token.
+      //    Jika tidak ada di token, baru cari di database lokal sebagai fallback.
+      //    Ini memastikan sistem otorisasi bersifat stateless dan cepat.
+      if (!decodedToken.role) {
+        const user = await db.user.findOne({ where: { uid: decodedToken.uid }, attributes: ['role'] });
+        if (user) {
+          req.user.role = user.role;
+        }
       }
 
       next();

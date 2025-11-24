@@ -6,8 +6,8 @@ const detailUserController = require('../controllers/detailUserController');
 const checkAuth = require('../middlewares/authMiddleware');
 const checkRole = require('../middlewares/checkRole');
 
-// CREATE: Menyimpan data detail user
-router.post('/', checkAuth, detailUserController.createDetailUser);
+// CREATE atau UPDATE (Upsert): Menyimpan data detail user
+router.post('/', checkAuth, detailUserController.upsertDetailUser);
 
 // READ: Mendapatkan data detail user
 router.get('/', checkAuth, detailUserController.getDetailUser);

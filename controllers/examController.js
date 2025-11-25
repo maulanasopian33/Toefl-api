@@ -230,3 +230,175 @@ exports.updateExamData = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * [BARU] Mengambil metadata dasar sebuah tes (batch) dan urutan bagiannya.
+ * Digunakan untuk memuat halaman awal ujian dengan cepat.
+ * Route: GET /tests/:testId/metadata
+ */
+exports.getTestMetadata = async (req, res, next) => {
+  try {
+    const { testId } = req.params;
+
+    // 1. Cari data tes (batch) berdasarkan ID
+    const test = await db.batch.findByPk(testId, {
+      attributes: ['idBatch', 'namaBatch', 'durasi'],
+    });
+
+    if (!test) {
+      return res.status(404).json({ message: `Tes dengan ID ${testId} tidak ditemukan.` });
+    }
+
+    // 2. Ambil semua bagian (sections) yang terkait, diurutkan
+    const sections = await db.section.findAll({
+      where: { batchId: testId },
+      attributes: ['idSection', 'namaSection'],
+      order: [['idSection', 'ASC']], // Diasumsikan urutan berdasarkan ID
+    });
+
+    // 3. Format output JSON sesuai permintaan
+    const response = {
+      id: test.idBatch,
+      name: test.namaBatch,
+      totalTime: test.durasi, // total waktu tes dalam detik
+      sectionOrder: sections.map(section => ({
+        id: section.idSection,
+        name: section.namaSection,
+      })),
+    };
+
+    res.status(200).json(response);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * [BARU] Mengambil seluruh data untuk satu bagian (section) spesifik.
+ * Termasuk grup soal, pertanyaan, dan pilihan jawaban (tanpa kunci jawaban).
+ * Route: GET /tests/:testId/sections/:sectionId
+ */
+exports.getSectionData = async (req, res, next) => {
+  try {
+    const { sectionId } = req.params;
+
+    const section = await db.section.findByPk(sectionId, {
+      attributes: ['idSection', 'namaSection', 'deskripsi'],
+      include: [{
+        model: db.group,
+        as: 'groups',
+        attributes: ['idGroup', 'passage'],
+        include: [{
+            model: db.groupAudioInstruction,
+            as: 'audioInstructions',
+            attributes: ['audioUrl'],
+          },
+          {
+            model: db.question,
+            as: 'questions',
+            attributes: ['idQuestion', 'text'], // 'text' adalah 'question'
+            include: [{
+              model: db.option,
+              as: 'options',
+              attributes: ['idOption', 'text'], // Tidak menyertakan isCorrect
+            }, ],
+          },
+        ],
+      }, ],
+      order: [
+        [{ model: db.group, as: 'groups' }, 'idGroup', 'ASC'],
+        [{ model: db.group, as: 'groups' }, { model: db.question, as: 'questions' }, 'idQuestion', 'ASC'],
+      ],
+    });
+
+    if (!section) {
+      return res.status(404).json({ message: `Bagian dengan ID ${sectionId} tidak ditemukan.` });
+    }
+
+    // Format output JSON sesuai permintaan
+    const formattedData = {
+      id: section.idSection,
+      name: section.namaSection,
+      instructions: section.deskripsi,
+      // audioInstructions tidak ada di model section, jadi null
+      audioInstructions: null,
+      groups: section.groups.map(group => ({
+        id: group.idGroup,
+        passage: group.passage,
+        audioUrl: group.audioInstructions.length > 0 ? group.audioInstructions[0].audioUrl : null,
+        questions: group.questions.map(question => ({
+          id: question.idQuestion,
+          question: question.text,
+          options: question.options.map(opt => ({
+            id: opt.idOption,
+            text: opt.text,
+          })),
+        })),
+      })),
+    };
+
+    res.status(200).json(formattedData);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * [BARU] Menerima jawaban dari pengguna, menghitung skor, dan menyimpan hasil.
+ * Route: POST /tests/:testId/submit
+ */
+exports.submitTest = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const { testId } = req.params;
+    const { answers } = req.body;
+    const { uid: userId } = req.user;
+
+    if (!Array.isArray(answers) || answers.length === 0) {
+      return res.status(400).json({ message: "Body request tidak valid. 'answers' harus berupa array." });
+    }
+
+    const questionIds = answers.map(a => a.questionId);
+
+    // Ambil semua kunci jawaban untuk pertanyaan yang relevan dalam satu query
+    const correctAnswers = await db.option.findAll({
+      where: {
+        questionId: { [Op.in]: questionIds },
+        isCorrect: true,
+      },
+      attributes: ['questionId', 'idOption'],
+      transaction,
+    });
+
+    // Buat map untuk pencarian cepat: { questionId: correctOptionId }
+    const answerKey = new Map(correctAnswers.map(a => [a.questionId, a.idOption]));
+
+    // Hitung skor
+    let score = 0;
+    for (const answer of answers) {
+      if (answerKey.has(answer.questionId) && answerKey.get(answer.questionId) === answer.userAnswer) {
+        score++;
+      }
+    }
+
+    // Simpan hasil ke tabel userResult (sesuai dengan struktur yang ada)
+    const testResult = await db.userResult.create({
+      userId,
+      batchId: testId,
+      score: score,
+      completedAt: new Date(),
+      // totalQuestions bisa ditambahkan jika perlu
+    }, { transaction });
+
+    await transaction.commit();
+
+    res.status(201).json({
+      score: score,
+      totalQuestions: answers.length,
+      testResultId: testResult.id,
+    });
+  } catch (error) {
+    await transaction.rollback();
+    next(error);
+  }
+};

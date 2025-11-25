@@ -19,7 +19,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+/logs/*.json
 # Environment variables
 # Abaikan file environment yang berisi variabel sensitif seperti kunci API atau kredensial database
 .env

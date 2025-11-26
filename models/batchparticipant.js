@@ -20,7 +20,7 @@ module.exports = (sequelize, DataTypes) => {
     userId: DataTypes.STRING
   }, {
     sequelize,
-    modelName: 'batchParticipant',
+    modelName: 'batchparticipant',
   });
   return batchParticipant;
 };

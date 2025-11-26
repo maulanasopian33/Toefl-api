@@ -3,7 +3,7 @@
 const corsOptions = {
   // Ganti 'http://localhost:3000' dengan URL front-end Anda
   // Anda juga bisa memasukkan beberapa URL dalam array
-  origin: 'http://localhost:3000',
+  origin: ['http://localhost:3000','https://toafl.maulanasopian.my.id/'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 };

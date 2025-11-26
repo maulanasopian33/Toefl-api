@@ -11,7 +11,7 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      this.belongsTo(models.batchParticipant, { foreignKey: 'participantId', as: 'participant' });
+      this.belongsTo(models.batchparticipant, { foreignKey: 'participantId', as: 'participant' });
     }
   }
   payment.init({

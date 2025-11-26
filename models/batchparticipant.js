@@ -3,7 +3,7 @@ const {
   Model
 } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
-  class batchParticipant extends Model {
+  class batchparticipant extends Model {
     /**
      * Helper method for defining associations.
      * This method is not a part of Sequelize lifecycle.
@@ -15,12 +15,12 @@ module.exports = (sequelize, DataTypes) => {
       this.belongsTo(models.user, { foreignKey: 'userId', as: 'user' });
     }
   }
-  batchParticipant.init({
+  batchparticipant.init({
     batchId: DataTypes.STRING,
     userId: DataTypes.STRING
   }, {
     sequelize,
     modelName: 'batchparticipant',
   });
-  return batchParticipant;
+  return batchparticipant;
 };

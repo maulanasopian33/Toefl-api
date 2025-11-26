@@ -29,7 +29,7 @@ exports.getAllBatches = async (req, res, next) => {
     });
 
     // 2. Ambil semua ID batch yang sudah diikuti oleh pengguna
-    const userParticipations = await db.batchParticipant.findAll({
+    const userParticipations = await db.batchparticipant.findAll({
       where: { userId: uid },
       attributes: ['batchId']
     });
@@ -63,7 +63,7 @@ exports.getBatchById = async (req, res, next) => {
       },
       include : [
         { 
-          model: db.batchParticipant , 
+          model: db.batchparticipant , 
           as: "participants", 
           include: [
             { model: db.user, as: "user", attributes: ['name', 'email', 'picture'] },

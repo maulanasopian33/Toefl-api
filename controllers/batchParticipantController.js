@@ -16,8 +16,6 @@ module.exports = {
         await t.rollback();
         return res.status(404).json({ status: false, message: 'Batch not found' });
       }
-
-      console.log(batch);
       
       // Validasi harga batch
       if (batch.price <= 0) {
@@ -27,14 +25,14 @@ module.exports = {
       }
 
       // Cek apakah user sudah join
-      const existing = await db.batchParticipant.findOne({ where: { userId, batchId } , transaction: t});
+      const existing = await db.batchparticipant.findOne({ where: { userId, batchId } , transaction: t});
       if (existing) {
          await t.rollback();
          return res.status(400).json({ status: false, message: 'Already joined this batch' });
       }
 
       // Buat participant
-      const participant = await db.batchParticipant.create({
+      const participant = await db.batchparticipant.create({
         id: uuidv4(),
         batchId,
         userId,
@@ -76,7 +74,7 @@ module.exports = {
 
   async getParticipants(req, res, next) {
     try {
-      const participants = await db.batchParticipant.findAll({
+      const participants = await db.batchparticipant.findAll({
         include: [
           { model: db.payment, as: 'payments' },
           { model: db.batch, as: 'batch' },

@@ -46,7 +46,7 @@ exports.getFinancialRecap = async (req, res, next) => {
       where: whereCondition,
       // Include batch for filtering if batchId is provided
       include: batchId ? [{
-        model: require('../models').batchParticipant,
+        model: require('../models').batchparticipant,
         as: 'participant',
         attributes: [],
         where: { batchId: batchId },

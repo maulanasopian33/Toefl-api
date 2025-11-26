@@ -22,7 +22,7 @@ module.exports = {
       const { count, rows } = await db.payment.findAndCountAll({
         where: wherePayment,
         include: [{
-          model: db.batchParticipant,
+          model: db.batchparticipant,
           as: 'participant',
           where: whereParticipant,
           include: [
@@ -64,7 +64,7 @@ module.exports = {
 
       const { count, rows } = await db.payment.findAndCountAll({
         include: [{
-          model: db.batchParticipant,
+          model: db.batchparticipant,
           as: 'participant',
           where: { batchId: batchId }, // Filter berdasarkan batchId
           include: [
@@ -104,14 +104,14 @@ module.exports = {
       }
 
       // 2. Cek apakah peserta sudah terdaftar di batch
-      let participant = await db.batchParticipant.findOne({ where: { userId, batchId } });
+      let participant = await db.batchparticipant.findOne({ where: { userId, batchId } });
 
       // 3. Jika peserta belum ada, daftarkan dulu
       if (!participant) {
         const batch = await db.batch.findByPk(batchId);
         if (!batch) return res.status(404).json({ status: false, message: 'Batch not found' });
 
-        participant = await db.batchParticipant.create({
+        participant = await db.batchparticipant.create({
           id: uuidv4(),
           batchId,
           userId,

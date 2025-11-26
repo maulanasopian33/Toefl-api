@@ -272,7 +272,7 @@ exports.getJoinedBatches = async (req, res, next) => {
   try {
     const { uid } = req.user; // Dapatkan UID dari pengguna yang sedang login
 
-    const participations = await db.batchParticipant.findAll({
+    const participations = await db.batchparticipant.findAll({
       where: { userId: uid },
       include: [
         {

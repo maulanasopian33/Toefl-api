@@ -4,8 +4,8 @@ const checkRole = require('../middlewares/checkRole');
 var router = express.Router();
 
 /* GET home page. */
-router.get('/', checkAuth, checkRole(['admin']), function(req, res, next) {
-  res.send('berhasil')
+router.get('/', function(req, res, next) {
+  res.render('index', { title: 'Express' });
 });
 
 module.exports = router;

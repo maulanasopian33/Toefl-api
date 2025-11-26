@@ -1,11 +1,210 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title><%= title %></title>
-    <link rel='stylesheet' href='/stylesheets/style.css' />
-  </head>
-  <body>
-    <h1><%= title %></h1>
-    <p>Welcome to <%= title %></p>
-  </body>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TOEFL API - Platform Persiapan Tes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #0052cc;
+      --secondary-color: #f4f5f7;
+      --text-color: #172b4d;
+      --success-color: #00875a;
+      --light-text-color: #5e6c84;
+      --white-color: #ffffff;
+      --border-radius: 12px;
+      --box-shadow: 0 10px 20px rgba(0, 0, 0, 0.07);
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #e0eafc, #cfdef3);
+      color: var(--text-color);
+      margin: 0;
+      padding: 40px 20px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      line-height: 1.7;
+    }
+
+    .container {
+      text-align: center;
+      background: var(--white-color);
+      padding: 40px 50px;
+      border-radius: var(--border-radius);
+      box-shadow: var(--box-shadow);
+      max-width: 900px;
+      width: 100%;
+      transition: transform 0.3s ease;
+    }
+
+    header h1 {
+      font-size: 3rem;
+      color: var(--primary-color);
+      margin-bottom: 15px;
+      font-weight: 700;
+    }
+
+    header p {
+      font-size: 1.1rem;
+      color: var(--light-text-color);
+      margin-bottom: 40px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .status {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      background-color: var(--secondary-color);
+      padding: 15px;
+      border-radius: var(--border-radius);
+      margin-bottom: 40px;
+      border: 1px solid #dfe1e6;
+    }
+
+    .status-indicator {
+      width: 15px;
+      height: 15px;
+      background-color: var(--success-color);
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+
+    .status-text {
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--success-color);
+    }
+
+    .features {
+      margin-bottom: 40px;
+    }
+
+    .features h2 {
+      font-size: 1.8rem;
+      color: var(--primary-color);
+      margin-bottom: 30px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 25px;
+      text-align: left;
+    }
+
+    .feature-card {
+      background: var(--secondary-color);
+      padding: 25px;
+      border-radius: var(--border-radius);
+      border: 1px solid #dfe1e6;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 15px rgba(0, 82, 204, 0.1);
+    }
+
+    .feature-card h3 {
+      margin-top: 0;
+      margin-bottom: 10px;
+      font-size: 1.1rem;
+      color: var(--text-color);
+    }
+
+    .feature-card p {
+      font-size: 0.9rem;
+      color: var(--light-text-color);
+      margin-bottom: 0;
+    }
+
+    .cta {
+      margin-bottom: 30px;
+    }
+
+    .cta-button {
+      display: inline-block;
+      background-color: var(--primary-color);
+      color: var(--white-color);
+      padding: 15px 30px;
+      border-radius: 50px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: background-color 0.3s ease, transform 0.3s ease;
+    }
+
+    .cta-button:hover {
+      background-color: #0041a3;
+      transform: translateY(-3px);
+    }
+
+    footer {
+      margin-top: 40px;
+      font-size: 0.9rem;
+      color: var(--light-text-color);
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 135, 90, 0.7); }
+      70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(0, 135, 90, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 135, 90, 0); }
+    }
+
+    @media (max-width: 768px) {
+      .container { padding: 30px; }
+      header h1 { font-size: 2.5rem; }
+      .features-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>TOEFL API Platform</h1>
+      <p>API andal untuk membangun aplikasi persiapan tes TOEFL yang canggih dan interaktif.</p>
+    </header>
+
+    <div class="status">
+      <div class="status-indicator"></div>
+      <span class="status-text">API Status: All Systems Operational</span>
+    </div>
+
+    <section class="features">
+      <h2>Fitur Utama</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <h3>Manajemen Soal</h3>
+          <p>Endpoint lengkap untuk membuat, membaca, memperbarui, dan menghapus soal latihan.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Manajemen Pengguna</h3>
+          <p>Kelola data pengguna, otentikasi, dan otorisasi dengan aman dan efisien.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Pelacakan Skor</h3>
+          <p>Simpan dan analisis skor hasil tes pengguna untuk melacak kemajuan belajar.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta">
+      <a href="/docs" class="cta-button">Lihat Dokumentasi API</a>
+    </section>
+
+    <footer>
+      <p>&copy; 2025 TOEFL API Platform. All rights reserved.</p>
+    </footer>
+  </div>
+</body>
 </html>

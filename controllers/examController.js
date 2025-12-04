@@ -237,40 +237,56 @@ exports.updateExamData = async (req, res, next) => {
  * Route: GET /tests/:testId/metadata
  */
 exports.getTestMetadata = async (req, res, next) => {
-  try {
-    const { testId } = req.params;
+    const { testId } = req.params; // testId adalah batchId
 
-    // 1. Cari data tes (batch) berdasarkan ID
-    const test = await db.batch.findByPk(testId, {
-      attributes: ['idBatch', 'namaBatch', 'duration'],
-    });
+    try {
+        const batch = await db.batch.findByPk(testId, {
+            attributes: ['idBatch', 'namaBatch', 'duration'],
+            include: [{
+                model: db.section,
+                as: 'sections',
+                attributes: ['idSection', 'namaSection'],
+                include: [{
+                    model: db.group,
+                    as: 'groups',
+                    attributes: ['idGroup'],
+                    include: [{
+                        model: db.question,
+                        as: 'questions',
+                        attributes: ['idQuestion']
+                    }]
+                }]
+            }]
+        });
 
-    if (!test) {
-      return res.status(404).json({ message: `Tes dengan ID ${testId} tidak ditemukan.` });
+        if (!batch) {
+            return res.status(404).json({ message: `Ujian dengan ID ${testId} tidak ditemukan.` });
+        }
+
+        // Hitung total pertanyaan dari semua section dan group
+        let totalQuestions = 0;
+        batch.sections.forEach(section => {
+            section.groups.forEach(group => {
+                totalQuestions += group.questions.length;
+            });
+        });
+
+        // Urutkan section berdasarkan ID (asumsi urutan)
+        const sectionOrder = batch.sections
+            .sort((a, b) => a.idSection - b.idSection)
+            .map(s => ({ id: s.idSection, name: s.namaSection }));
+
+        res.json({
+            id: batch.idBatch,
+            name: batch.namaBatch,
+            totalTime: batch.duration,
+            totalQuestions: totalQuestions,
+            sectionOrder: sectionOrder
+        });
+
+    } catch (error) {
+        next(error);
     }
-
-    // 2. Ambil semua bagian (sections) yang terkait, diurutkan
-    const sections = await db.section.findAll({
-      where: { batchId: testId },
-      attributes: ['idSection', 'namaSection'],
-      order: [['idSection', 'ASC']], // Diasumsikan urutan berdasarkan ID
-    });
-
-    // 3. Format output JSON sesuai permintaan
-    const response = {
-      id: test.idBatch,
-      name: test.namaBatch,
-      totalTime: test.duration, // total waktu tes dalam detik
-      sectionOrder: sections.map(section => ({
-        id: section.idSection,
-        name: section.namaSection,
-      })),
-    };
-
-    res.status(200).json(response);
-  } catch (error) {
-    next(error);
-  }
 };
 
 /**
@@ -320,8 +336,9 @@ exports.getSectionData = async (req, res, next) => {
       id: section.idSection,
       name: section.namaSection,
       instructions: section.deskripsi,
-      // audioInstructions tidak ada di model section, jadi null
-      audioInstructions: null,
+      // Cari audio instruction di level section (jika ada)
+      // Asumsi: audio instruction untuk section disimpan di group pertama tanpa passage
+      audioInstructions: section.groups?.[0]?.audioInstructions?.[0]?.audioUrl || null,
       groups: section.groups.map(group => ({
         id: group.idGroup,
         passage: group.passage,
@@ -352,50 +369,97 @@ exports.submitTest = async (req, res, next) => {
   try {
     const { testId } = req.params;
     const { answers } = req.body;
-    const { uid: userId } = req.user;
+    const { uid } = req.user; // Ambil UID dari token Firebase
 
     if (!Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({ message: "Body request tidak valid. 'answers' harus berupa array." });
     }
 
+    // 1. Cari user di database lokal berdasarkan UID untuk mendapatkan ID primary key-nya.
+    const user = await db.user.findOne({ where: { uid }, attributes: ['uid'], transaction });
+    if (!user) {
+      return res.status(404).json({ message: "User tidak ditemukan di database." });
+    }
+    const localUserId = user.uid; // Ini adalah ID integer dari tabel 'users'
+
+    // 2. Ambil semua ID pertanyaan dari jawaban pengguna
     const questionIds = answers.map(a => a.questionId);
 
-    // Ambil semua kunci jawaban untuk pertanyaan yang relevan dalam satu query
-    const correctAnswers = await db.option.findAll({
+    // 3. Ambil data pertanyaan dan kunci jawaban yang relevan dalam satu query
+    const questionsWithAnswers = await db.question.findAll({
       where: {
-        questionId: { [Op.in]: questionIds },
-        isCorrect: true,
+        idQuestion: { [Op.in]: questionIds }
       },
-      attributes: ['questionId', 'idOption'],
+      attributes: ['idQuestion'],
+      include: [
+        {
+          model: db.option,
+          as: 'options',
+          where: { isCorrect: true },
+          attributes: ['idOption'],
+          required: false // Gunakan left join jika ada pertanyaan tanpa kunci jawaban
+        },
+        {
+          model: db.group,
+          as: 'group',
+          attributes: ['sectionId'] // Ambil sectionId dari group terkait
+        }
+      ],
       transaction,
     });
 
-    // Buat map untuk pencarian cepat: { questionId: correctOptionId }
-    const answerKey = new Map(correctAnswers.map(a => [a.questionId, a.idOption]));
-
-    // Hitung skor
-    let score = 0;
-    for (const answer of answers) {
-      if (answerKey.has(answer.questionId) && answerKey.get(answer.questionId) === answer.userAnswer) {
-        score++;
+    // 4. Buat map untuk pencarian cepat: { questionId: { correctOptionId, sectionId } }
+    const answerKey = new Map(questionsWithAnswers.map(q => [
+      q.idQuestion,
+      {
+        correctOptionId: q.options[0]?.idOption, // Ambil idOption dari opsi yang benar
+        sectionId: q.group?.sectionId // Ambil sectionId dari relasi group
       }
-    }
+    ]));
 
-    // Simpan hasil ke tabel userResult (sesuai dengan struktur yang ada)
-    const testResult = await db.userResult.create({
-      userId,
+    // 5. Hitung skor dan siapkan data jawaban untuk disimpan
+    let correctCount = 0;
+    const userAnswersToSave = answers.map(answer => {
+      const questionInfo = answerKey.get(answer.questionId);
+      if (questionInfo && questionInfo.correctOptionId === answer.userAnswer) {
+        correctCount++;
+      }
+      return {
+        userId: localUserId, // Gunakan ID lokal (integer)
+        batchId: testId,
+        sectionId: questionInfo ? questionInfo.sectionId : null, // Tambahkan sectionId
+        questionId: answer.questionId,
+        optionId: answer.userAnswer,
+      };
+    });
+    
+    const totalQuestions = answers.length;
+    const wrongCount = totalQuestions - correctCount;
+
+    // 6. Simpan semua jawaban pengguna dalam satu operasi
+    await db.userAnswer.bulkCreate(userAnswersToSave, { transaction });
+
+    // Placeholder untuk logika skor TOEFL yang lebih kompleks jika diperlukan
+    const finalScore = correctCount; // Saat ini skor = jumlah benar
+
+    // 7. Simpan hasil akhir ke tabel userResult
+    await db.userResult.create({
+      userId: localUserId, // Gunakan ID lokal (integer)
       batchId: testId,
-      score: score,
-      completedAt: new Date(),
-      // totalQuestions bisa ditambahkan jika perlu
+      totalQuestions: totalQuestions,
+      correctCount: correctCount,
+      wrongCount: wrongCount,
+      score: finalScore,
+      submittedAt: new Date(),
     }, { transaction });
 
     await transaction.commit();
 
     res.status(201).json({
-      score: score,
-      totalQuestions: answers.length,
-      testResultId: testResult.id,
+      score: finalScore,
+      totalQuestions: totalQuestions,
+      correctCount: correctCount,
+      wrongCount: wrongCount,
     });
   } catch (error) {
     await transaction.rollback();

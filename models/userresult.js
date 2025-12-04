@@ -15,7 +15,7 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   userResult.init({
-    userId: DataTypes.INTEGER,
+    userId: DataTypes.STRING,
     batchId: DataTypes.STRING,
     totalQuestions: DataTypes.INTEGER,
     correctCount: DataTypes.INTEGER,

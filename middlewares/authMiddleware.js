@@ -10,7 +10,7 @@ const checkAuth = async (req, res, next) => {
       // 2. Jadikan decodedToken sebagai dasar untuk req.user
       req.user = {
         ...decodedToken,
-      };
+      }; 
       
       // 3. Prioritaskan custom claim 'role' dari token.
       //    Jika tidak ada di token, baru cari di database lokal sebagai fallback.

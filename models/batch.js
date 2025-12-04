@@ -28,6 +28,12 @@ module.exports = (sequelize, DataTypes) => {
     price: DataTypes.DECIMAL,
     deskripsiBatch: DataTypes.TEXT,
     tanggalMulai: DataTypes.DATE,
+    duration: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 3600, // dalam detik (contoh: 1 jam)
+      comment: 'Durasi ujian dalam detik'
+    },
     tanggalSelesai: DataTypes.DATE,
     batasMaksimalPeserta: DataTypes.INTEGER,
     statusBatch: DataTypes.STRING,

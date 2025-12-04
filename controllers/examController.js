@@ -242,7 +242,7 @@ exports.getTestMetadata = async (req, res, next) => {
 
     // 1. Cari data tes (batch) berdasarkan ID
     const test = await db.batch.findByPk(testId, {
-      attributes: ['idBatch', 'namaBatch', 'durasi'],
+      attributes: ['idBatch', 'namaBatch', 'duration'],
     });
 
     if (!test) {
@@ -260,7 +260,7 @@ exports.getTestMetadata = async (req, res, next) => {
     const response = {
       id: test.idBatch,
       name: test.namaBatch,
-      totalTime: test.durasi, // total waktu tes dalam detik
+      totalTime: test.duration, // total waktu tes dalam detik
       sectionOrder: sections.map(section => ({
         id: section.idSection,
         name: section.namaSection,

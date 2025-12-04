@@ -39,20 +39,6 @@ const errorHandler = require('./middlewares/errorHandler');
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
-
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://toafl.maulanasopian.my.id");
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-
-  // Tangani preflight OPTIONS
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  next();
-});
-
 app.use(cors(corsOptions));
 
 // Gunakan morgan untuk HTTP request logging dan arahkan outputnya ke Winston

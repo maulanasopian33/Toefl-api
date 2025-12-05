@@ -332,3 +332,70 @@ exports.getResultsByUserAndBatch = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * [BARU] Mengambil detail jawaban untuk sebuah percobaan tes (attempt).
+ * Route: GET /results/answers/:attemptId
+ */
+exports.getAnswersByAttemptId = async (req, res, next) => {
+  try {
+    const { attemptId } = req.params;
+    const numericId = attemptId.startsWith('res-') ? attemptId.substring(4) : attemptId;
+
+    if (isNaN(numericId)) {
+      return res.status(400).json({ message: 'Format ID percobaan tes tidak valid.' });
+    }
+
+    // 1. Ambil semua jawaban untuk attemptId yang spesifik
+    const userAnswers = await db.userAnswer.findAll({
+      where: { userResultId: numericId },
+      include: [
+        {
+          model: db.question,
+          as: 'question',
+          attributes: ['idQuestion', 'text'],
+          include: [
+            {
+              model: db.option,
+              as: 'options', // Ambil semua opsi untuk mencari jawaban benar dan jawaban user
+              attributes: ['idOption', 'text', 'isCorrect'],
+            },
+            {
+              model: db.group,
+              as: 'group',
+              attributes: [],
+              include: [{ model: db.section, as: 'section', attributes: ['namaSection'] }],
+            },
+          ],
+        },
+      ],
+      order: [[{ model: db.question, as: 'question' }, 'idQuestion', 'ASC']],
+    });
+
+    if (userAnswers.length === 0) {
+      return res.status(404).json({ message: `Tidak ada jawaban ditemukan untuk percobaan tes ID ${attemptId}.` });
+    }
+
+    // 2. Format data sesuai dengan struktur yang diinginkan
+    const answerDetails = userAnswers.map((answer, index) => {
+      const question = answer.question;
+      const allOptions = question.options;
+
+      const userAnswerOption = allOptions.find(opt => opt.idOption === answer.optionId);
+      const correctAnswerOption = allOptions.find(opt => opt.isCorrect);
+
+      return {
+        questionNumber: index + 1,
+        questionText: question.text,
+        userAnswer: userAnswerOption ? userAnswerOption.text : null,
+        correctAnswer: correctAnswerOption ? correctAnswerOption.text : null,
+        isCorrect: answer.optionId === correctAnswerOption?.idOption,
+        section: question.text || "-",
+      };
+    });
+
+    res.status(200).json(answerDetails);
+  } catch (error) {
+    next(error);
+  }
+};

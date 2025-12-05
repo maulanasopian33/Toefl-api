@@ -18,6 +18,7 @@ module.exports = (sequelize, DataTypes) => {
   }
   userAnswer.init({
     userId: DataTypes.STRING,
+    userResultId : DataTypes.INTEGER,
     batchId: DataTypes.STRING,
     sectionId: DataTypes.STRING,
     questionId: DataTypes.STRING,

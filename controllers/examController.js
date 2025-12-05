@@ -436,14 +436,11 @@ exports.submitTest = async (req, res, next) => {
     const totalQuestions = answers.length;
     const wrongCount = totalQuestions - correctCount;
 
-    // 6. Simpan semua jawaban pengguna dalam satu operasi
-    await db.userAnswer.bulkCreate(userAnswersToSave, { transaction });
-
     // Placeholder untuk logika skor TOEFL yang lebih kompleks jika diperlukan
     const finalScore = correctCount; // Saat ini skor = jumlah benar
 
     // 7. Simpan hasil akhir ke tabel userResult
-    await db.userResult.create({
+    const createdResult = await db.userResult.create({
       userId: localUserId, // Gunakan ID lokal (integer)
       batchId: testId,
       totalQuestions: totalQuestions,
@@ -452,6 +449,13 @@ exports.submitTest = async (req, res, next) => {
       score: finalScore,
       submittedAt: new Date(),
     }, { transaction });
+
+    // 8. Tambahkan userResultId ke setiap jawaban dan simpan
+    const answersWithResultId = userAnswersToSave.map(answer => ({
+      ...answer,
+      userResultId: createdResult.id,
+    }));
+    await db.userAnswer.bulkCreate(answersWithResultId, { transaction });
 
     await transaction.commit();
 

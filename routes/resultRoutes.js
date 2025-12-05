@@ -12,6 +12,8 @@ router.get('/:batchId', checkAuth, checkRole(['admin']), resultController.getRes
 router.get('/detail/:resultId', resultController.getResultById);
 // GET /results/user/:userId/batch/:batchId - Mendapatkan hasil spesifik user per batch (hanya admin)
 router.get('/user/:userId/batch/:batchId', checkAuth, checkRole(['admin']), resultController.getResultsByUserAndBatch);
+// GET /results/answers/:attemptId - Mendapatkan detail jawaban per percobaan tes (hanya admin)
+router.get('/answers/:attemptId', checkAuth, checkRole(['admin']), resultController.getAnswersByAttemptId);
 
 
 module.exports = router;

@@ -261,46 +261,55 @@ exports.getResultsByUserAndBatch = async (req, res, next) => {
       order: [['submittedAt', 'DESC']],
     });
 
-    // 3. Ambil semua jawaban user di batch ini untuk kalkulasi skor section
-    const userAnswers = await db.userAnswer.findAll({
-      // PERBAIKAN: Gunakan user.uid (Primary Key) bukan user.uid
-      where: { userId: user.uid, batchId: batchId },
-      include: [{
-        model: db.question, as: 'question',
-        include: [
-          { model: db.option, as: 'options', where: { isCorrect: true }, required: false },
-          { model: db.group, as: 'group', include: [{ model: db.section, as: 'section' }] }
-        ]
-      }]
-    });
+    // 3. Iterasi setiap hasil tes untuk menghitung skor section-nya secara individual
+    const resultsList = await Promise.all(userResults.map(async (result) => {
+      // Ambil jawaban yang terkait dengan userResult ini (berdasarkan waktu submit)
+      const userAnswers = await db.userAnswer.findAll({
+        where: {
+          userId: user.uid,
+          batchId: result.batchId,
+          // Asumsi: jawaban disimpan pada waktu yang sama dengan hasil
+          createdAt: { [Op.lte]: result.submittedAt }
+        },
+        include: [{
+          model: db.question, as: 'question',
+          include: [
+            { model: db.option, as: 'options', where: { isCorrect: true }, required: false },
+            { model: db.group, as: 'group', include: [{ model: db.section, as: 'section' }] }
+          ]
+        }]
+      });
 
-    // 4. Hitung skor per section
-    const sectionCorrectCounts = {};
-    userAnswers.forEach(answer => {
-      const section = answer.question?.group?.section;
-      if (!section) return;
+      // Hitung skor per section untuk hasil tes ini
+      const sectionCorrectCounts = {};
+      userAnswers.forEach(answer => {
+        const section = answer.question?.group?.section;
+        if (!section) return;
 
-      const conversionType = getConversionTypeFromName(section.namaSection);
-      if (!sectionCorrectCounts[conversionType]) {
-        sectionCorrectCounts[conversionType] = { correct: 0, name: section.namaSection };
+        // PERBAIKAN: Gunakan nama section sebagai kunci unik, bukan tipe konversi
+        if (!sectionCorrectCounts[section.namaSection]) {
+          sectionCorrectCounts[section.namaSection] = { 
+            correct: 0, 
+            conversionType: getConversionTypeFromName(section.namaSection) 
+          };
+        }
+        if (answer.question?.options[0]?.idOption === answer.optionId) {
+          sectionCorrectCounts[section.namaSection].correct++;
+        }
+      });
+
+      const finalSectionScores = {};
+      for (const [sectionName, data] of Object.entries(sectionCorrectCounts)) {
+        finalSectionScores[sectionName] = convertScore(data.correct, data.conversionType);
       }
-      if (answer.question?.options[0]?.idOption === answer.optionId) {
-        sectionCorrectCounts[conversionType].correct++;
-      }
-    });
 
-    const finalSectionScores = {};
-    for (const [type, data] of Object.entries(sectionCorrectCounts)) {
-      finalSectionScores[data.name] = convertScore(data.correct, type);
-    }
-
-    // 5. Format hasil akhir menjadi objek tunggal
-    const resultsList = userResults.map(result => ({
-      id: `res-${result.id}`,
-      batchName: result.batch.namaBatch,
-      completedDate: result.submittedAt,
-      score: result.score,
-      sectionScores: finalSectionScores,
+      return {
+        id: `res-${result.id}`,
+        batchName: result.batch.namaBatch,
+        completedDate: result.submittedAt,
+        score: result.score,
+        sectionScores: finalSectionScores,
+      };
     }));
     
     const finalResponse = {

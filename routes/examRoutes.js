@@ -17,6 +17,12 @@ router.get('/:testId/sections/:sectionId', checkAuth, examController.getSectionD
 // 3. Endpoint untuk mengirim jawaban dan mendapatkan hasil
 router.post('/:testId/submit', checkAuth, examController.submitTest);
 
+// 4. Endpoint untuk mendapatkan daftar riwayat tes pengguna
+router.get('/history', checkAuth, examController.getTestHistoryList);
+
+// 5. Endpoint untuk mendapatkan detail hasil tes dari riwayat
+router.get('/history/:historyId', checkAuth, examController.getTestResult);
+
 
 // --- Endpoint untuk Editor/Admin ---
 

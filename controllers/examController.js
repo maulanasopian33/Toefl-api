@@ -466,3 +466,182 @@ exports.submitTest = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Tabel konversi skor TOEFL ITP.
+ * @param {number} correctCount - Jumlah jawaban benar.
+ * @param {string} conversionType - Tipe section ('listening', 'structure', 'reading').
+ * @returns {number} Skor yang telah dikonversi.
+ */
+const convertScore = (correctCount, conversionType) => {
+  const scoresForCount = {
+    listening: [24, 25, 26, 27, 29, 30, 31, 32, 32, 33, 35, 37, 37, 38, 41, 41, 42, 43, 44, 45, 45, 46, 47, 48, 49, 49, 50, 51, 52, 53, 54, 54, 55, 56, 57, 57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 67, 68],
+    structure: [20, 20, 21, 22, 23, 25, 26, 27, 29, 31, 33, 35, 36, 37, 38, 40, 40, 41, 42, 43, 44, 45, 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 60, 61, 63, 65, 67, 68],
+    reading: [21, 22, 23, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 43, 44, 45, 46, 46, 47, 48, 49, 50, 51, 52, 52, 53, 54, 54, 55, 56, 57, 58, 59, 60, 61, 63, 65, 66, 67],
+  };
+  // Jika jumlah benar di luar rentang, kembalikan skor min/max
+  if (correctCount <= 0) return scoresForCount[conversionType][0] || 20;
+  if (correctCount >= scoresForCount[conversionType].length) return scoresForCount[conversionType][scoresForCount[conversionType].length - 1] || 68;
+
+  return scoresForCount[conversionType][correctCount - 1] || 20;
+};
+
+/**
+ * Menentukan tipe konversi skor berdasarkan nama section.
+ * @param {string} sectionName - Nama section, contoh: "Listening Comprehension".
+ * @returns {string} Tipe konversi ('listening', 'structure', 'reading').
+ */
+const getConversionTypeFromName = (sectionName) => {
+  const lowerCaseName = sectionName.toLowerCase();
+  if (lowerCaseName.includes('listening')) return 'listening';
+  if (lowerCaseName.includes('structure')) return 'structure';
+  if (lowerCaseName.includes('reading')) return 'reading';
+  // Fallback default jika tidak ada yang cocok
+  return 'structure';
+};
+
+/**
+ * [BARU] Mengambil riwayat hasil tes untuk seorang peserta.
+ * Route: GET /history/:historyId
+ */
+exports.getTestResult = async (req, res, next) => {
+  try {
+    const { historyId: rawHistoryId } = req.params;
+    const { uid } = req.user; // Ambil UID dari token Firebase
+
+    // Ekstrak ID numerik dari string format 'tes_history_123'
+    const historyId = rawHistoryId.split('_').pop();
+
+    // 1. Ambil hasil tes utama
+    const userResult = await db.userResult.findOne({
+      where: { id: historyId, userId: uid },
+      include: [{ model: db.batch, as: 'batch', attributes: ['namaBatch'] }],
+    });
+
+    if (!userResult) {
+      return res.status(404).json({ message: 'Riwayat tes tidak ditemukan.' });
+    }
+
+    // 2. Ambil semua jawaban pengguna untuk tes ini
+    const userAnswers = await db.userAnswer.findAll({
+      where: { userId: uid, batchId: userResult.batchId },
+      attributes: ['optionId'],
+      include: [
+        {
+          model: db.question, as: 'question', attributes: ['idQuestion', 'text'],
+          include: [
+            { model: db.option, as: 'options', where: { isCorrect: true }, attributes: ['idOption'], required: false },
+            { model: db.group, as: 'group', attributes: ['sectionId'], include: [{ model: db.section, as: 'section', attributes: ['idSection', 'namaSection'] }] }
+          ]
+        }
+      ]
+    });
+
+    // 3. Hitung skor per section
+    const sectionScores = {};
+    userAnswers.forEach(answer => {
+      const section = answer.question?.group?.section;
+      if (!section) return;
+
+      if (!sectionScores[section.idSection]) {
+        const conversionType = getConversionTypeFromName(section.namaSection);
+        sectionScores[section.idSection] = { name: section.namaSection, conversionType: conversionType, correct: 0, total: 0 };
+      }
+
+      const isCorrect = answer.question?.options[0]?.idOption === answer.optionId;
+      if (isCorrect) {
+        sectionScores[section.idSection].correct++;
+      }
+      sectionScores[section.idSection].total++;
+    });
+
+    // 4. Konversi ke skor skala dan format output
+    let totalScaledScore = 0;
+    const sectionsForResponse = Object.entries(sectionScores).map(([id, secData]) => {
+      const rawScore = secData.correct;
+      // Konversi skor mentah ke skor skala
+      const scaledScore = convertScore(rawScore, secData.conversionType);
+      totalScaledScore += scaledScore;
+      return {
+        name: secData.name,
+        score: scaledScore,
+      };
+    });
+
+    // 5. Hitung skor akhir TOEFL
+    // Rata-rata dari 3 section, dikalikan 10
+    const finalScore = Math.round((totalScaledScore / 3) * 10);
+
+    // 6. Format jawaban pengguna untuk ditampilkan di frontend
+    const detailedAnswers = userAnswers.map(answer => {
+      const question = answer.question;
+      const section = question?.group?.section;
+      const isCorrect = question?.options[0]?.idOption === answer.optionId;
+
+      return {
+        questionId: question.idQuestion,
+        questionText: question.text,
+        userAnswerId: answer.optionId,
+        correctAnswerId: question?.options[0]?.idOption,
+        isCorrect: isCorrect,
+        sectionName: section ? section.namaSection : 'Unknown',
+      };
+    });
+
+    // 7. Kirim respons lengkap
+    res.status(200).json({
+      testName: userResult.batch.namaBatch,
+      submittedAt: userResult.submittedAt,
+      finalScore: finalScore,
+      summary: {
+        totalQuestions: userResult.totalQuestions,
+        correctCount: userResult.correctCount,
+        wrongCount: userResult.wrongCount,
+      },
+      sectionScores: sectionsForResponse,
+      detailedAnswers: detailedAnswers,
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * [BARU] Mengambil daftar riwayat tes yang pernah dikerjakan oleh pengguna.
+ * Route: GET /history
+ */
+exports.getTestHistoryList = async (req, res, next) => {
+  try {
+    const { uid } = req.user; // Ambil UID dari token Firebase
+
+    const historyList = await db.userResult.findAll({
+      where: { userId: uid },
+      include: [{
+        model: db.batch,
+        as: 'batch',
+        attributes: ['namaBatch'],
+      }, ],
+      attributes: ['id', 'score', 'submittedAt'], // 'id' di sini adalah historyId
+      order: [
+        ['submittedAt', 'DESC']
+      ],
+    });
+
+    // Format respons agar lebih ramah untuk frontend
+    const formattedHistory = historyList.map(item => {
+      const historyId = `hist-${item.id}`;
+      return {
+        id: historyId,
+        batchName: item.batch ? item.batch.namaBatch : 'Nama Tes Tidak Tersedia',
+        completedDate: item.submittedAt, // Sudah dalam format ISO 8601
+        score: item.score,
+        detailsUrl: `/history/${historyId}`
+      };
+    });
+
+    res.status(200).json(formattedHistory);
+  } catch (error) {
+    next(error);
+  }
+};

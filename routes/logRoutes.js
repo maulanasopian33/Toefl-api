@@ -5,6 +5,6 @@ const logController = require('../controllers/logController');
 const checkAuth = require('../middlewares/authMiddleware');
 const checkRole = require('../middlewares/checkRole');
 
-router.get('/', logController.getLogsByDate);
+router.get('/', checkAuth, checkRole(['admin']), logController.getLogsByDate);
 
 module.exports = router;

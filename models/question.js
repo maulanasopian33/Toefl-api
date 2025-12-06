@@ -13,7 +13,7 @@ module.exports = (sequelize, DataTypes) => {
       this.belongsTo(models.group, { foreignKey: "groupId", as: "group" });
       this.belongsTo(models.section, { foreignKey: "sectionId", as: "section" });
       this.hasMany(models.option, { foreignKey: "questionId", as: "options" });
-      this.hasMany(models.userAnswer, { foreignKey: "questionId", as: "answers" });
+      this.hasMany(models.useranswer, { foreignKey: "questionId", as: "answers" });
     }
   }
   question.init({

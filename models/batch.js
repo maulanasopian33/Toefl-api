@@ -14,8 +14,8 @@ module.exports = (sequelize, DataTypes) => {
       this.hasMany(models.batchparticipant, { foreignKey: 'batchId', as: 'participants' });
       this.hasMany(models.section, { foreignKey: "batchId", as: "sections" });
       this.hasMany(models.group, { foreignKey: "batchId", as: "groups" });
-      this.hasMany(models.userResult, { foreignKey: "batchId", as: "results" });
-      this.hasMany(models.userAnswer, { foreignKey: "batchId", as: "answers" });
+      this.hasMany(models.userresult, { foreignKey: "batchId", as: "results" });
+      this.hasMany(models.useranswer, { foreignKey: "batchId", as: "answers" });
     }
   }
   batch.init({

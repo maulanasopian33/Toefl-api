@@ -11,10 +11,10 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       this.belongsTo(models.batch, { foreignKey: "batchId", as: "batch" });
-      this.hasMany(models.sectionAudioInstruction, { foreignKey: "sectionId", as: "audioInstructions" });
+      this.hasMany(models.sectionaudioinstruction, { foreignKey: "sectionId", as: "audioInstructions" });
       this.hasMany(models.group, { foreignKey: "sectionId", as: "groups" });
       this.hasMany(models.question, { foreignKey: "sectionId", as: "questions" });
-      this.hasMany(models.userAnswer, { foreignKey: "sectionId", as: "answers" });
+      this.hasMany(models.useranswer, { foreignKey: "sectionId", as: "answers" });
     }
   }
   section.init({

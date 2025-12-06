@@ -3,7 +3,7 @@ const {
   Model
 } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
-  class sectionAudioInstruction extends Model {
+  class sectionaudioinstruction extends Model {
     /**
      * Helper method for defining associations.
      * This method is not a part of Sequelize lifecycle.
@@ -14,13 +14,13 @@ module.exports = (sequelize, DataTypes) => {
       this.belongsTo(models.section, { foreignKey: "sectionId", as: "section" });
     }
   }
-  sectionAudioInstruction.init({
+  sectionaudioinstruction.init({
     sectionId: DataTypes.STRING,
     audioUrl: DataTypes.STRING,
     description: DataTypes.STRING
   }, {
     sequelize,
-    modelName: 'sectionAudioInstruction',
+    modelName: 'sectionaudioinstruction',
   });
-  return sectionAudioInstruction;
+  return sectionaudioinstruction;
 };

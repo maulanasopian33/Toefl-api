@@ -52,7 +52,7 @@ exports.getResultsByBatch = async (req, res, next) => {
     const { batchId } = req.params;
 
     // 1. Ambil semua hasil tes untuk batch ini, termasuk data user dan batch
-    const userResults = await db.userResult.findAll({
+    const userResults = await db.userresult.findAll({
       where: { batchId },
       include: [
         {
@@ -161,7 +161,7 @@ exports.getResultById = async (req, res, next) => {
     }
 
     // 1. Ambil data hasil tes utama beserta relasi
-    const userResult = await db.userResult.findByPk(numericId, {
+    const userResult = await db.userresult.findByPk(numericId, {
       include: [
         {
           model: db.user,
@@ -251,7 +251,7 @@ exports.getResultsByUserAndBatch = async (req, res, next) => {
     }
 
     // 2. Ambil semua hasil tes untuk user dan batch tersebut
-    const userResults = await db.userResult.findAll({
+    const userResults = await db.userresult.findAll({
       where: {
         // PERBAIKAN: Gunakan user.uid (Primary Key) bukan user.uid
         userId: user.uid,

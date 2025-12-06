@@ -3,7 +3,7 @@ const {
   Model
 } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
-  class userAnswer extends Model {
+  class useranswer extends Model {
     /**
      * Helper method for defining associations.
      * This method is not a part of Sequelize lifecycle.
@@ -16,7 +16,7 @@ module.exports = (sequelize, DataTypes) => {
       this.belongsTo(models.option, { foreignKey: "optionId", as: "option" });
     }
   }
-  userAnswer.init({
+  useranswer.init({
     userId: DataTypes.STRING,
     userResultId : DataTypes.INTEGER,
     batchId: DataTypes.STRING,
@@ -25,7 +25,7 @@ module.exports = (sequelize, DataTypes) => {
     optionId: DataTypes.STRING
   }, {
     sequelize,
-    modelName: 'userAnswer',
+    modelName: 'useranswer',
   });
   
   // Helper untuk ambil result
@@ -39,7 +39,7 @@ module.exports = (sequelize, DataTypes) => {
   }
 
   // 🔥 Hook afterCreate
-  userAnswer.afterCreate(async (answer, options) => {
+  useranswer.afterCreate(async (answer, options) => {
     const { option } = sequelize.models;
     try {
       const chosenOption = await option.findByPk(answer.optionId);
@@ -59,9 +59,9 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   // 🔥 Hook beforeUpdate → simpan jawaban lama
-  userAnswer.beforeUpdate(async (answer, options) => {
+  useranswer.beforeUpdate(async (answer, options) => {
     const { option } = sequelize.models;
-    const oldAnswer = await userAnswer.findByPk(answer.id);
+    const oldAnswer = await useranswer.findByPk(answer.id);
     if (oldAnswer) {
       const oldOption = await option.findByPk(oldAnswer.optionId);
       answer._oldIsCorrect = oldOption?.isCorrect || false; // simpan di instance
@@ -69,7 +69,7 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   // 🔥 Hook afterUpdate → update result berdasar perubahan jawaban
-  userAnswer.afterUpdate(async (answer, options) => {
+  useranswer.afterUpdate(async (answer, options) => {
     const { option } = sequelize.models;
     try {
       const newOption = await option.findByPk(answer.optionId);
@@ -100,5 +100,5 @@ module.exports = (sequelize, DataTypes) => {
     }
   });
 
-  return userAnswer;
+  return useranswer;
 };

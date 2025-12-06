@@ -33,7 +33,7 @@ exports.getExamData = async (req, res, next) => {
               attributes: ['idQuestion', 'text', 'type'],
             },
             {
-              model: db.groupAudioInstruction,
+              model: db.groupaudioinstruction,
               as: 'audioInstructions',
               attributes: ['audioUrl'],
             },
@@ -192,7 +192,7 @@ exports.updateExamData = async (req, res, next) => {
 
     // Hapus GroupAudioInstructions untuk grup yang ada di payload (akan dibuat ulang)
     if (incomingGroupIds.length > 0) {
-      await db.groupAudioInstruction.destroy({ where: { groupId: { [Op.in]: incomingGroupIds } }, transaction });
+      await db.groupaudioinstruction.destroy({ where: { groupId: { [Op.in]: incomingGroupIds } }, transaction });
     }
 
     // Hapus Groups yang tidak ada di payload untuk batch ini
@@ -208,7 +208,7 @@ exports.updateExamData = async (req, res, next) => {
     await db.group.bulkCreate(groupsToUpsert, { updateOnDuplicate: ["passage", "sectionId"], transaction });
 
     if (audioInstructionsToUpsert.length > 0) {
-      await db.groupAudioInstruction.bulkCreate(audioInstructionsToUpsert, { transaction });
+      await db.groupaudioinstruction.bulkCreate(audioInstructionsToUpsert, { transaction });
     }
 
     await db.question.bulkCreate(questionsToUpsert, { updateOnDuplicate: ["text", "type"], transaction });
@@ -305,7 +305,7 @@ exports.getSectionData = async (req, res, next) => {
         as: 'groups',
         attributes: ['idGroup', 'passage'],
         include: [{
-            model: db.groupAudioInstruction,
+            model: db.groupaudioinstruction,
             as: 'audioInstructions',
             attributes: ['audioUrl'],
           },
@@ -440,7 +440,7 @@ exports.submitTest = async (req, res, next) => {
     const finalScore = correctCount; // Saat ini skor = jumlah benar
 
     // 7. Simpan hasil akhir ke tabel userResult
-    const createdResult = await db.userResult.create({
+    const createdResult = await db.userresult.create({
       userId: localUserId, // Gunakan ID lokal (integer)
       batchId: testId,
       totalQuestions: totalQuestions,
@@ -517,7 +517,7 @@ exports.getTestResult = async (req, res, next) => {
     const historyId = rawHistoryId.split('_').pop();
 
     // 1. Ambil hasil tes utama
-    const userResult = await db.userResult.findOne({
+    const userResult = await db.userresult.findOne({
       where: { id: historyId, userId: uid },
       include: [{ model: db.batch, as: 'batch', attributes: ['namaBatch'] }],
     });
@@ -619,7 +619,7 @@ exports.getTestHistoryList = async (req, res, next) => {
   try {
     const { uid } = req.user; // Ambil UID dari token Firebase
 
-    const historyList = await db.userResult.findAll({
+    const historyList = await db.userresult.findAll({
       where: { userId: uid },
       include: [{
         model: db.batch,

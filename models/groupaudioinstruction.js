@@ -3,7 +3,7 @@ const {
   Model
 } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
-  class groupAudioInstruction extends Model {
+  class groupaudioinstruction extends Model {
     /**
      * Helper method for defining associations.
      * This method is not a part of Sequelize lifecycle.
@@ -13,13 +13,13 @@ module.exports = (sequelize, DataTypes) => {
       this.belongsTo(models.group, { foreignKey: "groupId", as: "group" });
     }
   }
-  groupAudioInstruction.init({
+  groupaudioinstruction.init({
     groupId: DataTypes.STRING,
     audioUrl: DataTypes.STRING,
     description: DataTypes.STRING
   }, {
     sequelize,
-    modelName: 'groupAudioInstruction',
+    modelName: 'groupaudioinstruction',
   });
-  return groupAudioInstruction;
+  return groupaudioinstruction;
 };

@@ -72,7 +72,7 @@ exports.getResultsByBatch = async (req, res, next) => {
 
     // 2. Ambil semua jawaban dari semua user di batch ini dalam satu query
     const userIds = userResults.map(r => r.userId);
-    const allAnswers = await db.userAnswer.findAll({
+    const allAnswers = await db.useranswer.findAll({
       where: { batchId, userId: { [Op.in]: userIds } },
       attributes: ['userId', 'optionId'],
       include: [{
@@ -178,7 +178,7 @@ exports.getResultById = async (req, res, next) => {
     }
 
     // 2. Ambil jawaban user untuk menghitung skor per section
-    const userAnswers = await db.userAnswer.findAll({
+    const userAnswers = await db.useranswer.findAll({
       where: { userId: userResult.userId, batchId: userResult.batchId },
       include: [{
         model: db.question, as: 'question', attributes: ['idQuestion'],
@@ -264,7 +264,7 @@ exports.getResultsByUserAndBatch = async (req, res, next) => {
     // 3. Iterasi setiap hasil tes untuk menghitung skor section-nya secara individual
     const resultsList = await Promise.all(userResults.map(async (result) => {
       // Ambil jawaban yang terkait dengan userResult ini (berdasarkan waktu submit)
-      const userAnswers = await db.userAnswer.findAll({
+      const userAnswers = await db.useranswer.findAll({
         where: {
           userId: user.uid,
           batchId: result.batchId,
@@ -347,7 +347,7 @@ exports.getAnswersByAttemptId = async (req, res, next) => {
     }
 
     // 1. Ambil semua jawaban untuk attemptId yang spesifik
-    const userAnswers = await db.userAnswer.findAll({
+    const userAnswers = await db.useranswer.findAll({
       where: { userResultId: numericId },
       include: [
         {

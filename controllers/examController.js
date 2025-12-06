@@ -421,7 +421,7 @@ exports.submitTest = async (req, res, next) => {
     let correctCount = 0;
     const userAnswersToSave = answers.map(answer => {
       const questionInfo = answerKey.get(answer.questionId);
-      if (questionInfo && questionInfo.correctOptionId === answer.userAnswer) {
+      if (questionInfo && questionInfo.correctOptionId === answer.useranswer) {
         correctCount++;
       }
       return {
@@ -429,7 +429,7 @@ exports.submitTest = async (req, res, next) => {
         batchId: testId,
         sectionId: questionInfo ? questionInfo.sectionId : null, // Tambahkan sectionId
         questionId: answer.questionId,
-        optionId: answer.userAnswer,
+        optionId: answer.useranswer,
       };
     });
     
@@ -455,7 +455,7 @@ exports.submitTest = async (req, res, next) => {
       ...answer,
       userResultId: createdResult.id,
     }));
-    await db.userAnswer.bulkCreate(answersWithResultId, { transaction });
+    await db.useranswer.bulkCreate(answersWithResultId, { transaction });
 
     await transaction.commit();
 
@@ -527,7 +527,7 @@ exports.getTestResult = async (req, res, next) => {
     }
 
     // 2. Ambil semua jawaban pengguna untuk tes ini
-    const userAnswers = await db.userAnswer.findAll({
+    const userAnswers = await db.useranswer.findAll({
       where: { userId: uid, batchId: userResult.batchId },
       attributes: ['optionId'],
       include: [

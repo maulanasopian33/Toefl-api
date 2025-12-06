@@ -421,7 +421,7 @@ exports.submitTest = async (req, res, next) => {
     let correctCount = 0;
     const userAnswersToSave = answers.map(answer => {
       const questionInfo = answerKey.get(answer.questionId);
-      if (questionInfo && questionInfo.correctOptionId === answer.useranswer) {
+      if (questionInfo && questionInfo.correctOptionId === answer.userAnswer) {
         correctCount++;
       }
       return {
@@ -429,7 +429,7 @@ exports.submitTest = async (req, res, next) => {
         batchId: testId,
         sectionId: questionInfo ? questionInfo.sectionId : null, // Tambahkan sectionId
         questionId: answer.questionId,
-        optionId: answer.useranswer,
+        optionId: answer.userAnswer,
       };
     });
     

@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "start": "nodemon ./bin/www",
+    "dev": "nodemon ./bin/www",
+    "start": "node ./bin/www",
     "test": "jest --runInBand"
   },
   "dependencies": {
@@ -19,7 +20,7 @@
     "morgan": "~1.9.1",
     "multer": "^2.0.2",
     "mysql2": "^3.14.3",
-    "nodemon": "^3.1.10",
+    "nodemon": "^3.1.11",
     "sequelize": "^6.37.7",
     "sequelize-cli": "^6.6.3",
     "uuid": "8.3.2",

@@ -11,6 +11,11 @@ router.get('/', function(req, res, next) {
 });
 
 /**
+ * Route untuk mengambil daftar sertifikat (dengan filter)
+ */
+router.get('/certificates', certificateController.getCertificates);
+
+/**
  * Route untuk menerima Callback dari Service Python
  * Payload: { original_data, result: { download_url, pdf_path }, status, timestamp }
  */

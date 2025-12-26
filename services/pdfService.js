@@ -3,7 +3,7 @@ const { logger } = require('../utils/logger');
 
 // Konfigurasi URL Service Python dan URL Callback aplikasi Node ini
 // Sebaiknya dipindahkan ke process.env pada production
-const PYTHON_SERVICE_URL = process.env.PYTHON_PDF_SERVICE_URL || 'http://127.0.0.1:8000/generate';
+const PYTHON_SERVICE_URL = process.env.PYTHON_PDF_SERVICE_URL || 'http://103.146.63.147:8001/generate';
 const APP_CALLBACK_URL = process.env.APP_CALLBACK_URL || 'http://localhost:5000/callback';
 
 /**

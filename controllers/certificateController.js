@@ -1,4 +1,5 @@
 const db = require('../models');
+const { Op } = require('sequelize');
 const { logger } = require('../utils/logger');
 const { generateCertificatePdf } = require('../services/pdfService');
 const axios = require('axios');
@@ -91,5 +92,63 @@ exports.testGenerate = async (req, res) => {
   } catch (error) {
     logger.error('Error requesting PDF generation:', error);
     res.status(500).json({ error: 'Failed to request PDF generation' });
+  }
+};
+
+/**
+ * Mengambil daftar sertifikat dengan filter dan pagination
+ * GET /certificates
+ */
+exports.getCertificates = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = '', userId, event, startDate, endDate } = req.query;
+    const offset = (page - 1) * limit;
+
+    const whereClause = {};
+
+    // Filter berdasarkan User ID (jika ada)
+    if (userId) {
+      whereClause.userId = userId;
+    }
+
+    // Filter berdasarkan Event
+    if (event) {
+      whereClause.event = { [Op.like]: `%${event}%` };
+    }
+
+    // Filter berdasarkan Rentang Tanggal
+    if (startDate && endDate) {
+      whereClause.date = { [Op.between]: [startDate, endDate] };
+    } else if (startDate) {
+      whereClause.date = { [Op.gte]: startDate };
+    }
+
+    // Pencarian (Search) pada Nama atau Nomor Sertifikat
+    if (search) {
+      whereClause[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { certificateNumber: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    const { count, rows } = await db.certificate.findAndCountAll({
+      where: whereClause,
+      limit: parseInt(limit, 10),
+      offset: parseInt(offset, 10),
+      order: [['createdAt', 'DESC']],
+      include: [{ model: db.user, as: 'user', attributes: ['name', 'email'] }]
+    });
+
+    res.status(200).json({
+      status: true,
+      message: 'Daftar sertifikat berhasil diambil.',
+      data: rows,
+      totalItems: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: parseInt(page, 10)
+    });
+  } catch (error) {
+    logger.error('Error fetching certificates:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 };

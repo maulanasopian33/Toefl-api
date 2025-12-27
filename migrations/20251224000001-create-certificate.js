@@ -18,7 +18,7 @@ module.exports = {
         type: Sequelize.STRING,
         allowNull: true,
         references: {
-          model: 'Users', // Sesuaikan dengan nama tabel user di DB (biasanya 'Users' atau 'users')
+          model: 'users', // Sesuaikan dengan nama tabel user di DB (biasanya 'Users' atau 'users')
           key: 'uid'
         },
         onUpdate: 'CASCADE',

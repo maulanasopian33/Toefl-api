@@ -3,10 +3,10 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.addColumn('userAnswers', 'userResultId', {
+    await queryInterface.addColumn('useranswers', 'userResultId', {
       type: Sequelize.INTEGER,
       references: {
-        model: 'userResults', // Pastikan nama tabel ini sesuai dengan di database Anda
+        model: 'userresults', // Pastikan nama tabel ini sesuai dengan di database Anda
         key: 'id',
       },
       onUpdate: 'CASCADE',
@@ -16,6 +16,6 @@ module.exports = {
   },
 
   async down(queryInterface, Sequelize) {
-    await queryInterface.removeColumn('userAnswers', 'userResultId');
+    await queryInterface.removeColumn('useranswers', 'userResultId');
   }
 };

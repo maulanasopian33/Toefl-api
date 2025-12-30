@@ -91,6 +91,73 @@ module.exports = {
     }
   },
 
+  async getPaymentById(req, res, next) {
+    try {
+      const { id } = req.params;
+      const payment = await db.payment.findByPk(id, {
+        include: [{
+          model: db.batchparticipant,
+          as: 'participant',
+          include: [
+            { model: db.user, as: 'user', attributes: ['name', 'email'] },
+            { model: db.batch, as: 'batch', attributes: ['namaBatch', 'price'] }
+          ]
+        }]
+      });
+
+      if (!payment) {
+        return res.status(404).json({ status: false, message: 'Payment not found' });
+      }
+
+      res.status(200).json({
+        status: true,
+        message: 'Detail pembayaran berhasil diambil.',
+        data: payment
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async getPaymentsByUser(req, res, next) {
+    try {
+      const { userId } = req.params;
+      // Authorization check: Admin atau user yang bersangkutan
+      if (req.user.role !== 'admin' && req.user.uid !== userId) {
+         return res.status(403).json({ status: false, message: 'Forbidden: Anda tidak diizinkan mengakses data ini.' });
+      }
+
+      const { page = 1, limit = 10 } = req.query;
+      const offset = (page - 1) * limit;
+
+      const { count, rows } = await db.payment.findAndCountAll({
+        include: [{
+          model: db.batchparticipant,
+          as: 'participant',
+          where: { userId: userId },
+          include: [
+             { model: db.batch, as: 'batch', attributes: ['namaBatch', 'price', 'tanggalMulai', 'tanggalSelesai'] }
+          ],
+          required: true
+        }],
+        limit: parseInt(limit, 10),
+        offset: parseInt(offset, 10),
+        order: [['createdAt', 'DESC']]
+      });
+
+      res.status(200).json({
+        status: true,
+        message: 'Berhasil mengambil riwayat pembayaran user.',
+        data: rows,
+        totalItems: count,
+        totalPages: Math.ceil(count / limit),
+        currentPage: parseInt(page, 10)
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async createManualPayment(req, res, next) {
     try {
       const { userId, batchId, amount, status, method } = req.body;
@@ -224,6 +291,26 @@ module.exports = {
         status: true,
         message: 'Payment updated successfully',
         data: payment,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async deletePayment(req, res, next) {
+    try {
+      const { id } = req.params;
+      const payment = await db.payment.findByPk(id);
+      
+      if (!payment) {
+        return res.status(404).json({ status: false, message: 'Payment not found' });
+      }
+
+      await payment.destroy({ user: req.user });
+
+      res.status(200).json({
+        status: true,
+        message: 'Pembayaran berhasil dihapus.'
       });
     } catch (error) {
       next(error);

@@ -9,6 +9,11 @@ exports.handleLogin = async (req, res, next) => {
   try {
     const { uid, email, name, picture, email_verified, auth_time } = req.user;
     const localPicturePath = await downloadImage(picture, uid);
+    
+    // Ambil Role default (user) untuk pengguna baru
+    const userRole = await db.role.findOne({ where: { name: 'user' } });
+    const defaultRoleId = userRole ? userRole.id : null;
+
     // Use findOrCreate to handle both cases efficiently
     const [user, created] = await db.user.findOrCreate({
       where: { uid: uid },
@@ -18,7 +23,8 @@ exports.handleLogin = async (req, res, next) => {
         name: name,
         email_verified: email_verified,
         picture: localPicturePath,
-        lastLogin: new Date(auth_time * 1000) // Convert seconds to milliseconds
+        lastLogin: new Date(auth_time * 1000), // Convert seconds to milliseconds
+        roleId: defaultRoleId
       },
       user: req.user // Pass user for hooks
     });
@@ -35,17 +41,18 @@ exports.handleLogin = async (req, res, next) => {
     }
 
     // --- PERBAIKAN: Sinkronkan role dari DB ke Firebase Custom Claim ---
+    // Ambil data user terbaru beserta role-nya untuk memastikan konsistensi
+    const userWithRole = await db.user.findByPk(uid, {
+      include: [{ model: db.role, as: 'role', attributes: ['name'] }]
+    });
+
+    const roleName = userWithRole && userWithRole.role ? userWithRole.role.name : 'user';
+
     // Ini memastikan token pengguna selalu memiliki claim role yang up-to-date.
-    await admin.auth().setCustomUserClaims(uid, { role: user.role });
-    // if (user.role) {
-    //   // Cek apakah claim yang ada sekarang berbeda dengan yang di DB
-    //   // Ini untuk menghindari pemanggilan yang tidak perlu
-    //   if (req.user.role !== user.role) {
-    //   }
-    // }
+    await admin.auth().setCustomUserClaims(uid, { role: roleName });
     
     // Buat objek user yang akan dikirim sebagai respons, pastikan role-nya benar
-    const responseUser = { ...req.user, role: user.role };
+    const responseUser = { ...req.user, role: roleName };
     
     logger.info({
       message: `User login successful: ${email}`,
@@ -79,7 +86,10 @@ exports.getUsers = async (req, res, next) => {
 
     const { count, rows } = await db.user.findAndCountAll({
       where: search ? whereClause : {},
-      include: [{ model: db.detailuser, as: 'detailuser' }], // Sertakan data UserDetail
+      include: [
+        { model: db.detailuser, as: 'detailuser' },
+        { model: db.role, as: 'role', attributes: ['name'] }
+      ], // Sertakan data UserDetail dan Role
       limit: parseInt(limit, 10),
       offset: parseInt(offset, 10),
       order: [['createdAt', 'DESC']]
@@ -103,6 +113,7 @@ exports.getUsers = async (req, res, next) => {
         // Gabungkan data dari DB lokal dengan data dari Firebase
         return {
           ...user.toJSON(), // Data dari database (termasuk detailuser)
+          role: user.role ? user.role.name : null, // Flatten role name
           disabled: firebaseUser.disabled,
           uuidFb : firebaseUser.uid,
           fb: firebaseUser
@@ -132,7 +143,10 @@ exports.getUserByUid = async (req, res) => {
   try {
     const user = await db.user.findOne({
       where: { uid: uid },
-      include: [{ model: db.detailuser }] // Sertakan data UserDetail
+      include: [
+        { model: db.detailuser },
+        { model: db.role, as: 'role', attributes: ['name'] }
+      ] // Sertakan data UserDetail dan Role
     });
     if (!user) {
       return res.status(404).json({ 
@@ -140,10 +154,12 @@ exports.getUserByUid = async (req, res) => {
         message: "User tidak ditemukan."
      });
     }
+    
+    const userData = user.toJSON();
     res.status(200).json({
         status : true,
         message: "User berhasil diambil.",
-        data: user
+        data: { ...userData, role: user.role ? user.role.name : null }
     });
   } catch (err) {
     res.status(500).json({ 
@@ -184,15 +200,15 @@ exports.toggleUserStatus = async (req, res, next) => {
 
 exports.changeUserRole = async (req, res, next) => {
   const { uid } = req.params;
-  const { role: newRole } = req.body;
+  const { role: newRoleName } = req.body;
 
   try {
-    // 1. Validasi input role
-    const validRoles = ['admin', 'user'];
-    if (!newRole || !validRoles.includes(newRole)) {
+    // 1. Validasi input role (Cek di DB)
+    const roleInstance = await db.role.findOne({ where: { name: newRoleName } });
+    if (!roleInstance) {
       return res.status(400).json({
         status: false,
-        message: `Role tidak valid. Gunakan salah satu dari: ${validRoles.join(', ')}`
+        message: `Role '${newRoleName}' tidak ditemukan.`
       });
     }
 
@@ -206,22 +222,22 @@ exports.changeUserRole = async (req, res, next) => {
     }
 
     // 3. Update role di database lokal
-    await user.update({ role: newRole }, { user: req.user });
+    await user.update({ roleId: roleInstance.id }, { user: req.user });
 
     // 4. Set custom claim di Firebase Authentication
-    await admin.auth().setCustomUserClaims(uid, { role: newRole });
+    await admin.auth().setCustomUserClaims(uid, { role: roleInstance.name });
 
     // 5. Cabut semua sesi aktif pengguna untuk memaksa login ulang
     await admin.auth().revokeRefreshTokens(uid);
     
     logger.info({
-      message: `User role for UID ${uid} changed to ${newRole}.`,
+      message: `User role for UID ${uid} changed to ${roleInstance.name}.`,
       action: 'USER_ROLE_CHANGED',
       user: req.user.email, // Admin yang melakukan aksi
-      details: { targetUid: uid, newRole: newRole }
+      details: { targetUid: uid, newRole: roleInstance.name }
     });
 
-    res.status(200).json({ status: true, message: `Role user berhasil diubah menjadi ${newRole}.` });
+    res.status(200).json({ status: true, message: `Role user berhasil diubah menjadi ${roleInstance.name}.` });
   } catch (error) {
     logger.error(`Failed to change role for user ${uid}: ${error.message}`);
     next(error);

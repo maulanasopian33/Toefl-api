@@ -24,6 +24,8 @@ const examRoutes = require('./routes/examRoutes');
 const mediaRoutes = require('./routes/mediaRoutes');
 const logRoutes = require('./routes/logRoutes');
 const settingRoutes = require('./routes/settingRoutes');
+const rolePermissionRoutes = require('./routes/rolePermissionRoutes');
+
 
 const { httpLogger } = require('./utils/logger');
 
@@ -69,7 +71,7 @@ app.use('/exams', examRoutes);
 app.use('/media', mediaRoutes);
 app.use('/logs', logRoutes);
 app.use('/settings', settingRoutes);
-
+app.use('/rbac', rolePermissionRoutes);
 // Middleware untuk menangani route yang tidak ditemukan (404 Not Found)
 app.use((req, res, next) => {
   const error = new Error('Not Found');

@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const detailUserController = require('../controllers/detailUserController');
 const checkAuth = require('../middlewares/authMiddleware');
-const checkRole = require('../middlewares/checkRole');
+const { checkPermission } = require('../middlewares/rbacMiddleware');
 
 // CREATE atau UPDATE (Upsert): Menyimpan data detail user
 router.post('/', checkAuth, detailUserController.upsertDetailUser);
@@ -19,7 +19,7 @@ router.put('/', checkAuth, detailUserController.updateDetailUser);
 router.delete('/', checkAuth, detailUserController.deleteDetailUser);
 
 // Contoh endpoint yang hanya bisa diakses admin untuk melihat semua detail user
-router.get('/all', checkAuth, checkRole(['admin']), async (req, res, next) => {
+router.get('/all', checkAuth, checkPermission('user.view_all'), async (req, res, next) => {
   try {
     const allDetails = await DetailUser.findAll();
     res.json(allDetails);

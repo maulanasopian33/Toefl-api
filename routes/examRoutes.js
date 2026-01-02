@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const examController = require('../controllers/examController');
 const checkAuth = require('../middlewares/authMiddleware');
-const checkRole = require('../middlewares/checkRole');
+const { checkPermission } = require('../middlewares/rbacMiddleware');
 
 // --- Endpoint untuk Peserta Ujian ---
 
@@ -15,21 +15,21 @@ router.get('/:testId/metadata', checkAuth, examController.getTestMetadata);
 router.get('/:testId/sections/:sectionId', checkAuth, examController.getSectionData);
 
 // 3. Endpoint untuk mengirim jawaban dan mendapatkan hasil
-router.post('/:testId/submit', checkAuth, examController.submitTest);
+router.post('/:testId/submit', checkAuth, checkPermission('test.submit'), examController.submitTest);
 
 // 4. Endpoint untuk mendapatkan daftar riwayat tes pengguna
-router.get('/history', checkAuth, examController.getTestHistoryList);
+router.get('/history', checkAuth, checkPermission('batch.read'), examController.getTestHistoryList);
 
 // 5. Endpoint untuk mendapatkan detail hasil tes dari riwayat
-router.get('/history/:historyId', checkAuth, examController.getTestResult);
+router.get('/history/:historyId', checkAuth, checkPermission('batch.read'), examController.getTestResult);
 
 
 // --- Endpoint untuk Editor/Admin ---
 
 // Mengambil seluruh data ujian untuk editor (termasuk jawaban)
-router.get('/:examId', checkAuth, checkRole(['admin']), examController.getExamData);
+router.get('/:examId', checkAuth, checkPermission('batch.update'), examController.getExamData);
 
 // Menyimpan (memperbarui) seluruh data ujian dari editor
-router.put('/:examId', checkAuth, checkRole(['admin']), examController.updateExamData);
+router.put('/:examId', checkAuth, checkPermission('batch.update'), examController.updateExamData);
 
 module.exports = router;

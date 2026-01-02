@@ -4,18 +4,18 @@ const controller = require('../controllers/paymentController');
 const paymentController = require('../controllers/paymentController');
 
 const checkAuth = require('../middlewares/authMiddleware');
-const checkRole = require('../middlewares/checkRole');
+const { checkPermission } = require('../middlewares/rbacMiddleware');
 const uploadMiddleware = require('../middlewares/uploadMiddleware');
 
-router.get('/', checkAuth, checkRole(['admin']), controller.getAllPayments);
-router.get('/batch/:batchId', controller.getPaymentsByBatch); // Route baru
-router.get('/user/:userId', checkAuth, controller.getPaymentsByUser); // Get payment by user
+router.get('/', checkAuth, checkPermission('payment.view_all'), controller.getAllPayments);
+router.get('/batch/:batchId', checkAuth, checkPermission('payment.view_all'), controller.getPaymentsByBatch); // Route baru
+router.get('/user/:userId', checkAuth, checkPermission(), controller.getPaymentsByUser); // Get payment by user (Permission dicek di controller)
 router.get('/:id', checkAuth, controller.getPaymentById); // Get detail payment
-router.post('/', checkAuth, checkRole(['admin']), controller.createManualPayment);
+router.post('/', checkAuth, checkPermission('payment.create'), controller.createManualPayment);
 
-router.put('/:id', checkAuth, checkRole(['admin']), controller.updatePayment); // Route baru untuk edit
-router.patch('/:id/status', checkAuth, checkRole(['admin']), controller.updatePaymentStatus); // Route lama tetap ada jika masih digunakan
-router.delete('/:id', checkAuth, checkRole(['admin']), controller.deletePayment); // Delete payment
+router.put('/:id', checkAuth, checkPermission('payment.update'), controller.updatePayment); // Route baru untuk edit
+router.patch('/:id/status', checkAuth, checkPermission('payment.update'), controller.updatePaymentStatus); // Route lama tetap ada jika masih digunakan
+router.delete('/:id', checkAuth, checkPermission('payment.update'), controller.deletePayment); // Delete payment
 
 // Endpoint untuk menambahkan bukti pembayaran ke transaksi tertentu
 // POST /payments/:id/proof

@@ -3,8 +3,8 @@ const router = express.Router();
 const logController = require('../controllers/logController');
 
 const checkAuth = require('../middlewares/authMiddleware');
-const checkRole = require('../middlewares/checkRole');
+const { checkPermission } = require('../middlewares/rbacMiddleware');
 
-router.get('/', checkAuth, checkRole(['admin']), logController.getLogsByDate);
+router.get('/', checkAuth, checkPermission('system.view_logs'), logController.getLogsByDate);
 
 module.exports = router;

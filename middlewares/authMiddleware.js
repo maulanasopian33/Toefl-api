@@ -16,9 +16,12 @@ const checkAuth = async (req, res, next) => {
       //    Jika tidak ada di token, baru cari di database lokal sebagai fallback.
       //    Ini memastikan sistem otorisasi bersifat stateless dan cepat.
       if (!decodedToken.role) {
-        const user = await db.user.findOne({ where: { uid: decodedToken.uid }, attributes: ['role'] });
-        if (user) {
-          req.user.role = user.role;
+        const user = await db.user.findOne({ 
+          where: { uid: decodedToken.uid },
+          include: [{ model: db.role, as: 'role', attributes: ['name'] }]
+        });
+        if (user && user.role) {
+          req.user.role = user.role.name;
         }
       }
 

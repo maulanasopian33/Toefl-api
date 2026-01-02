@@ -135,8 +135,13 @@ module.exports = {
   async getPaymentsByUser(req, res, next) {
     try {
       const { userId } = req.params;
-      // Authorization check: Admin atau user yang bersangkutan
-      if (req.user.role !== 'admin' && req.user.uid !== userId) {
+      
+      // Authorization check: User dengan permission 'payment.view_all' ATAU user yang bersangkutan
+      // req.user.permissions diisi oleh middleware rbacMiddleware
+      const canViewAll = req.user.permissions && req.user.permissions.includes('payment.view_all');
+      const isOwner = req.user.uid === userId;
+
+      if (!canViewAll && !isOwner) {
          return res.status(403).json({ status: false, message: 'Forbidden: Anda tidak diizinkan mengakses data ini.' });
       }
 

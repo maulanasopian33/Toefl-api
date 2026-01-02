@@ -12,6 +12,9 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       user.hasOne(models.detailuser, { foreignKey : 'uid' })
+      if (models.role) {
+        user.belongsTo(models.role, { foreignKey: 'roleId', as: 'role' });
+      }
     }
   }
   user.init({
@@ -45,9 +48,9 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
       // You can set a default value here or in the controller
     },
-    role: {
-      type: DataTypes.STRING,
-      defaultValue: 'user'
+    roleId: {
+      type: DataTypes.INTEGER,
+      allowNull: true
     }
   }, {
     sequelize,

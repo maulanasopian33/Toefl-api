@@ -37,6 +37,10 @@ module.exports = {
             { model: db.batch, as: 'batch', attributes: ['namaBatch'] }
           ],
           required: true
+        },
+        {
+          model: db.paymentproof,
+          as: 'proofs'
         }],
         limit: parseInt(limit, 10),
         offset: parseInt(offset, 10),
@@ -77,6 +81,10 @@ module.exports = {
             }
           ],
           required: true
+        },
+        {
+          model: db.paymentproof,
+          as: 'proofs'
         }],
         limit: parseInt(limit, 10),
         offset: parseInt(offset, 10),
@@ -102,6 +110,10 @@ module.exports = {
             { model: db.user, as: 'user', attributes: ['name', 'email'] },
             { model: db.batch, as: 'batch', attributes: ['namaBatch', 'price'] }
           ]
+        },
+        {
+          model: db.paymentproof,
+          as: 'proofs'
         }]
       });
 
@@ -139,6 +151,10 @@ module.exports = {
              { model: db.batch, as: 'batch', attributes: ['namaBatch', 'price', 'tanggalMulai', 'tanggalSelesai'] }
           ],
           required: true
+        },
+        {
+          model: db.paymentproof,
+          as: 'proofs'
         }],
         limit: parseInt(limit, 10),
         offset: parseInt(offset, 10),
@@ -311,6 +327,61 @@ module.exports = {
       res.status(200).json({
         status: true,
         message: 'Pembayaran berhasil dihapus.'
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async addPaymentProof(req, res, next) {
+    try {
+      const { id } = req.params; // paymentId
+      let { imageUrl } = req.body; // Bisa dari body jika kirim URL string
+
+      if (req.file) {
+        imageUrl = `/uploads/${req.file.filename}`; // Ambil dari file upload jika ada
+      }
+
+      if (!imageUrl) {
+        return res.status(400).json({ status: false, message: 'Image URL atau file wajib diisi.' });
+      }
+
+      const payment = await db.payment.findByPk(id);
+      if (!payment) {
+        return res.status(404).json({ status: false, message: 'Payment not found' });
+      }
+
+      const proof = await db.paymentproof.create({
+        id: uuidv4(),
+        paymentId: id,
+        imageUrl: imageUrl,
+        uploadedAt: new Date()
+      });
+
+      res.status(201).json({
+        status: true,
+        message: 'Bukti pembayaran berhasil ditambahkan.',
+        data: proof
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async deletePaymentProof(req, res, next) {
+    try {
+      const { proofId } = req.params;
+      const proof = await db.paymentproof.findByPk(proofId);
+
+      if (!proof) {
+        return res.status(404).json({ status: false, message: 'Bukti pembayaran tidak ditemukan.' });
+      }
+
+      await proof.destroy();
+
+      res.status(200).json({
+        status: true,
+        message: 'Bukti pembayaran berhasil dihapus.'
       });
     } catch (error) {
       next(error);

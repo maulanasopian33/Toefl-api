@@ -12,6 +12,7 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       this.belongsTo(models.batchparticipant, { foreignKey: 'participantId', as: 'participant' });
+      this.hasMany(models.paymentproof, { foreignKey: 'paymentId', as: 'proofs' });// Relasi ke paymentproof
     }
   }
   payment.init({

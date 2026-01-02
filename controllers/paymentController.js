@@ -2,6 +2,7 @@ const db = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { Op, literal } = require('sequelize');
 const { logger } = require('../utils/logger');
+const { generateInvoiceNumber } = require('../utils/invoiceGenerator');
 
 module.exports = {
   async getAllPayments(req, res, next) {
@@ -201,12 +202,15 @@ module.exports = {
         }, { user: req.user });
       }
 
+      // Generate nomor invoice baru (hanya dipakai jika create baru)
+      const newInvoiceNumber = await generateInvoiceNumber();
       // 4. Cek apakah sudah ada pembayaran, jika ada, update. Jika tidak, buat baru.
       // Logika ini mencegah duplikasi pembayaran jika joinBatch sudah dipanggil sebelumnya.
       const [payment, isCreated] = await db.payment.findOrCreate({
         where: { participantId: participant.id },
         defaults: {
           id: uuidv4(),
+          invoiceNumber: newInvoiceNumber,
           participantId: participant.id,
           amount,
           status,
@@ -218,12 +222,19 @@ module.exports = {
 
       if (!isCreated) {
         // Jika pembayaran sudah ada, update saja
-        await payment.update({
+        const updateData = {
           amount,
           status,
           method,
           paid_at: status === 'paid' ? new Date() : (status === 'pending' ? null : payment.paid_at),
-        }, { user: req.user });
+        };
+
+        // Jika data lama belum punya invoiceNumber (null), isi dengan yang baru digenerate
+        if (!payment.invoiceNumber) {
+          updateData.invoiceNumber = newInvoiceNumber;
+        }
+
+        await payment.update(updateData, { user: req.user });
       }
 
       res.status(isCreated ? 201 : 200).json({
@@ -231,20 +242,6 @@ module.exports = {
         message: `Pembayaran manual berhasil ${isCreated ? 'dibuat' : 'diperbarui'}.`,
         data: payment
       });
-
-      /*
-      // --- Kode Lama yang berpotensi duplikat ---
-      const newPayment = await db.payment.create({
-        id: uuidv4(),
-        participantId,
-        amount,
-        status,
-        method,
-        paid_at: status === 'paid' ? new Date() : null,
-      }, { user: req.user }); // Melewatkan user untuk logging hook
-
-      res.status(201).json({ status: true, message: 'Pembayaran manual berhasil ditambahkan.', data: newPayment });
-      */
     } catch (error) {
       next(error);
     }

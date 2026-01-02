@@ -2,6 +2,7 @@ const db = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { logger } = require('../utils/logger');
 const { sequelize } = require('../models'); // Import sequelize instance
+const { generateInvoiceNumber } = require('../utils/invoiceGenerator');
 
 module.exports = {
   async joinBatch(req, res, next) {
@@ -42,9 +43,12 @@ module.exports = {
       let payment = await db.payment.findOne({ where: { participantId: participant.id }, transaction: t });
 
       if (!payment) {
+        const newInvoiceNumber = await generateInvoiceNumber();
+
         // Jika belum ada, buat pembayaran baru
         payment = await db.payment.create({
           id: uuidv4(),
+          invoiceNumber: newInvoiceNumber,
           participantId: participant.id,
           amount: batch.price,
           status: 'pending',

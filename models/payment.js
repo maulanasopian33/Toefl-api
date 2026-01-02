@@ -17,6 +17,7 @@ module.exports = (sequelize, DataTypes) => {
   }
   payment.init({
       participantId: DataTypes.UUID,
+      invoiceNumber: DataTypes.STRING,
       amount: DataTypes.DECIMAL,
       status: DataTypes.ENUM('pending', 'paid', 'failed', 'refunded'),
       method: DataTypes.STRING,

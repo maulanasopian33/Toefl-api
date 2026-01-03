@@ -1,4 +1,4 @@
-const { batch, batchsession, user, sequelize } = require('../models');
+const { batch, batchsession, user, sequelize, batchparticipant, payment } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 
@@ -118,7 +118,15 @@ module.exports = {
       const data = await batch.findByPk(idBatch, {
         include: [
           { model: batchsession, as: 'sessions' },
-          { model: user, as: 'creator', attributes: ['uid', 'name', 'email'] }
+          { model: user, as: 'creator', attributes: ['uid', 'name', 'email'] },
+          { 
+            model: batchparticipant, 
+            as: "participants", 
+            include: [
+              { model: user, as: "user", attributes: ['name', 'email', 'picture'] },
+              { model: payment, as: 'payments' } // Tambahkan ini untuk menyertakan data pembayaran
+            ] 
+          }
         ]
       });
 

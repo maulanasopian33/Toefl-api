@@ -18,10 +18,10 @@ router.get('/:testId/sections/:sectionId', checkAuth, examController.getSectionD
 router.post('/:testId/submit', checkAuth, checkPermission('test.submit'), examController.submitTest);
 
 // 4. Endpoint untuk mendapatkan daftar riwayat tes pengguna
-router.get('/history', checkAuth, checkPermission('batch.read'), examController.getTestHistoryList);
+router.get('/history', checkAuth, checkPermission('batch.user'), examController.getTestHistoryList);
 
 // 5. Endpoint untuk mendapatkan detail hasil tes dari riwayat
-router.get('/history/:historyId', checkAuth, checkPermission('batch.read'), examController.getTestResult);
+router.get('/history/:historyId', checkAuth, checkPermission('batch.user'), examController.getTestResult);
 
 
 // --- Endpoint untuk Editor/Admin ---

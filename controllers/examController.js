@@ -241,7 +241,7 @@ exports.getTestMetadata = async (req, res, next) => {
 
     try {
         const batch = await db.batch.findByPk(testId, {
-            attributes: ['idBatch', 'namaBatch', 'duration'],
+            attributes: ['idBatch', 'name', 'duration_minutes'],
             include: [{
                 model: db.section,
                 as: 'sections',
@@ -278,8 +278,10 @@ exports.getTestMetadata = async (req, res, next) => {
 
         res.json({
             id: batch.idBatch,
-            name: batch.namaBatch,
-            totalTime: batch.duration,
+            name: batch.name,
+            start_date : batch.start_date,
+            end_date :  batch.end_date,
+            totalTime: batch.duration_minutes,
             totalQuestions: totalQuestions,
             sectionOrder: sectionOrder
         });
@@ -519,7 +521,7 @@ exports.getTestResult = async (req, res, next) => {
     // 1. Ambil hasil tes utama
     const userResult = await db.userresult.findOne({
       where: { id: historyId, userId: uid },
-      include: [{ model: db.batch, as: 'batch', attributes: ['namaBatch'] }],
+      include: [{ model: db.batch, as: 'batch', attributes: ['name'] }],
     });
 
     if (!userResult) {
@@ -594,7 +596,7 @@ exports.getTestResult = async (req, res, next) => {
 
     // 7. Kirim respons lengkap
     res.status(200).json({
-      testName: userResult.batch.namaBatch,
+      testName: userResult.batch.name,
       submittedAt: userResult.submittedAt,
       finalScore: finalScore,
       summary: {
@@ -624,7 +626,7 @@ exports.getTestHistoryList = async (req, res, next) => {
       include: [{
         model: db.batch,
         as: 'batch',
-        attributes: ['namaBatch'],
+        attributes: ['name'],
       }, ],
       attributes: ['id', 'score', 'submittedAt'], // 'id' di sini adalah historyId
       order: [
@@ -637,7 +639,7 @@ exports.getTestHistoryList = async (req, res, next) => {
       const historyId = `hist-${item.id}`;
       return {
         id: historyId,
-        batchName: item.batch ? item.batch.namaBatch : 'Nama Tes Tidak Tersedia',
+        batchName: item.batch ? item.batch.name : 'Nama Tes Tidak Tersedia',
         completedDate: item.submittedAt, // Sudah dalam format ISO 8601
         score: item.score,
         detailsUrl: `/history/${historyId}`

@@ -141,27 +141,88 @@ exports.getUsers = async (req, res, next) => {
 exports.getUserByUid = async (req, res) => {
   const { uid } = req.user;
   try {
+    // 1. Ambil data user dasar
     const user = await db.user.findOne({
       where: { uid: uid },
       include: [
-        { model: db.detailuser },
+        { model: db.detailuser, as: 'detailuser' },
         { model: db.role, as: 'role', attributes: ['name'] }
       ] // Sertakan data UserDetail dan Role
     });
+
     if (!user) {
       return res.status(404).json({ 
         status : false,
         message: "User tidak ditemukan."
      });
     }
+
+    // 2. Ambil statistik dan data tambahan secara paralel
+    const [
+      maxScore,
+      totalUjian,
+      totalSertifikat,
+      totalPembayaran,
+      recentExams,
+      recentCertificates
+    ] = await Promise.all([
+      // Skor Tertinggi
+      db.userresult.max('score', { where: { userId: uid } }),
+      
+      // Total Ujian
+      db.userresult.count({ where: { userId: uid } }),
+      
+      // Total Sertifikat
+      db.certificate.count({ where: { userId: uid } }),
+      
+      // Total Pembayaran (Sum amount where status = 'paid')
+      db.payment.sum('amount', {
+        where: { status: 'paid' },
+        include: [{
+          model: db.batchparticipant,
+          as: 'participant',
+          where: { userId: uid },
+          attributes: []
+        }]
+      }),
+
+      // Riwayat Ujian (3 Terakhir)
+      db.userresult.findAll({
+        where: { userId: uid },
+        limit: 3,
+        order: [['submittedAt', 'DESC']],
+        include: [{ model: db.batch, as: 'batch', attributes: ['name', 'type'] }]
+      }),
+
+      // Sertifikat Terakhir (3 Terakhir)
+      db.certificate.findAll({
+        where: { userId: uid },
+        limit: 3,
+        order: [['createdAt', 'DESC']]
+      })
+    ]);
     
     const userData = user.toJSON();
+    
+    // Format response sesuai permintaan
+    const responseData = {
+      ...userData,
+      role: user.role ? user.role.name : null,
+      "skor_tertinggi": maxScore || 0,
+      "total_Ujian": totalUjian || 0,
+      "total_sertifikat": totalSertifikat || 0,
+      "total_Pembayaran": totalPembayaran || 0,
+      "riwayat_ujian": recentExams,
+      "list_sertifikat": recentCertificates
+    };
+
     res.status(200).json({
         status : true,
         message: "User berhasil diambil.",
-        data: { ...userData, role: user.role ? user.role.name : null }
+        data: responseData
     });
   } catch (err) {
+    console.error('Error fetching user profile:', err);
     res.status(500).json({ 
         status  : false,
         message: "Terjadi kesalahan saat mengambil data user.",

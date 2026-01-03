@@ -35,7 +35,7 @@ module.exports = {
               required: true
             },
 
-            { model: db.batch, as: 'batch', attributes: ['namaBatch'] }
+            { model: db.batch, as: 'batch', attributes: ['name'] }
           ],
           required: true
         },
@@ -109,7 +109,7 @@ module.exports = {
           as: 'participant',
           include: [
             { model: db.user, as: 'user', attributes: ['name', 'email'] },
-            { model: db.batch, as: 'batch', attributes: ['namaBatch', 'price'] }
+            { model: db.batch, as: 'batch', attributes: ['name', 'price'] }
           ]
         },
         {
@@ -154,7 +154,7 @@ module.exports = {
           as: 'participant',
           where: { userId: userId },
           include: [
-             { model: db.batch, as: 'batch', attributes: ['namaBatch', 'price', 'tanggalMulai', 'tanggalSelesai'] }
+             { model: db.batch, as: 'batch', attributes: ['name', 'price', 'start_date', 'end_date'] }
           ],
           required: true
         },

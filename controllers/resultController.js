@@ -61,7 +61,7 @@ exports.getResultsByBatch = async (req, res, next) => {
           attributes: ['uid', 'name', 'email'],
           include: [{ model: db.detailuser, as: 'detailuser' }]
         },
-        { model: db.batch, as: 'batch', attributes: ['namaBatch'] }
+        { model: db.batch, as: 'batch', attributes: ['name'] }
       ],
       order: [['score', 'DESC']]
     });
@@ -133,7 +133,7 @@ exports.getResultsByBatch = async (req, res, next) => {
       // Tambahkan detail hasil tes ke dalam array 'results' milik user
       resultsByUser.get(userId).results.push({
         id: `res-${result.id}`,
-        batchName: result.batch.namaBatch,
+        batchName: result.batch.name,
         completedDate: result.submittedAt,
         score: result.score,
         sectionScores: finalSectionScores,
@@ -169,7 +169,7 @@ exports.getResultById = async (req, res, next) => {
           attributes: ['uid', 'name', 'email'],
           include: [{ model: db.detailuser, as: 'detailuser' }]
         },
-        { model: db.batch, as: 'batch', attributes: ['namaBatch'] }
+        { model: db.batch, as: 'batch', attributes: ['name'] }
       ]
     });
 
@@ -220,7 +220,7 @@ exports.getResultById = async (req, res, next) => {
       nim: userResult.user.detailuser?.nim || null,
       prodi: userResult.user.detailuser?.prodi || null,
       fakultas: userResult.user.detailuser?.fakultas || null,
-      batchName: userResult.batch.namaBatch,
+      batchName: userResult.batch.name,
       completedDate: userResult.submittedAt,
       score: userResult.score,
       sectionScores: finalSectionScores,
@@ -257,7 +257,7 @@ exports.getResultsByUserAndBatch = async (req, res, next) => {
         userId: user.uid,
         batchId: batchId,
       },
-      include: [{ model: db.batch, as: 'batch', attributes: ['namaBatch'] }],
+      include: [{ model: db.batch, as: 'batch', attributes: ['name'] }],
       order: [['submittedAt', 'DESC']],
     });
 
@@ -305,7 +305,7 @@ exports.getResultsByUserAndBatch = async (req, res, next) => {
 
       return {
         id: `res-${result.id}`,
-        batchName: result.batch.namaBatch,
+        batchName: result.batch.name,
         completedDate: result.submittedAt,
         score: result.score,
         sectionScores: finalSectionScores,

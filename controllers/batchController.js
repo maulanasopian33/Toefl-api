@@ -1,139 +1,205 @@
-// controllers/batchController.js
+const { batch, batchsession, user, sequelize } = require('../models');
+const { v4: uuidv4 } = require('uuid');
+const { Op } = require('sequelize');
 
-const db = require('../models');
-const { generateProfilePic } = require('../utils/profilePic');
-const { logger } = require('../utils/logger');
+module.exports = {
+  createBatch: async (req, res) => {
+    const transaction = await sequelize.transaction();
+    try {
+      const {
+        name,
+        description,
+        type,
+        start_date,
+        end_date,
+        registration_open_at,
+        registration_close_at,
+        max_participants,
+        min_participants,
+        status,
+        price,
+        currency,
+        duration_minutes,
+        special_instructions,
+        sessions // Expecting an array of session objects
+      } = req.body;
 
-// CREATE: Menambahkan batch baru (hanya admin)
-exports.createBatch = async (req, res, next) => {
-  try {
-    const newBatch = await db.batch.create(req.body, { user: req.user });
-    res.status(201).json({
-        status : true,
-        message: 'Batch berhasil dibuat.',
-        data: newBatch
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+      const idBatch = uuidv4();
+      const createdBy = req.user ? req.user.uid : null;
 
-// READ: Mendapatkan semua batch
-exports.getAllBatches = async (req, res, next) => {
-  try {
-    const { uid } = req.user; // Dapatkan UID pengguna yang sedang login
+      // 1. Create the Batch
+      const newBatch = await batch.create({
+        idBatch,
+        name,
+        description,
+        type,
+        start_date,
+        end_date,
+        registration_open_at,
+        registration_close_at,
+        max_participants,
+        min_participants,
+        status,
+        price,
+        currency,
+        duration_minutes,
+        special_instructions,
+        created_by: createdBy
+      }, { transaction });
 
-    // 1. Ambil semua batch yang tersedia, urutkan dari yang terbaru
-    const allBatches = await db.batch.findAll({
-      order: [['createdAt', 'DESC']]
-    });
+      // 2. Create Sessions if provided
+      if (sessions && Array.isArray(sessions) && sessions.length > 0) {
+        const sessionData = sessions.map(session => ({
+          ...session,
+          batch_id: idBatch
+        }));
+        await batchsession.bulkCreate(sessionData, { transaction });
+      }
 
-    // 2. Ambil semua ID batch yang sudah diikuti oleh pengguna
-    const userParticipations = await db.batchparticipant.findAll({
-      where: { userId: uid },
-      attributes: ['batchId']
-    });
-    const joinedBatchIds = new Set(userParticipations.map(p => p.batchId));
+      await transaction.commit();
 
-    // 3. Tambahkan status 'isJoined' ke setiap batch
-    const batchesWithStatus = allBatches.map(batch => {
-      const batchJSON = batch.toJSON();
-      return {
-        ...batchJSON,
-        isJoined: joinedBatchIds.has(batchJSON.idBatch)
-      };
-    });
+      // Fetch the created batch with sessions to return
+      const result = await batch.findByPk(idBatch, {
+        include: [
+          { model: batchsession, as: 'sessions' },
+          { model: user, as: 'creator', attributes: ['uid', 'name', 'email'] }
+        ]
+      });
 
-    res.status(200).json({
-      status: true,
-      message: 'Semua batch berhasil diambil.',
-      data: batchesWithStatus
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// READ: Mendapatkan satu batch berdasarkan idBatch
-exports.getBatchById = async (req, res, next) => {
-  try {
-    const batch = await db.batch.findAll({
-      where: {
-        idBatch: req.params.idBatch
-      },
-      include : [
-        { 
-          model: db.batchparticipant , 
-          as: "participants", 
-          include: [
-            { model: db.user, as: "user", attributes: ['name', 'email', 'picture'] },
-            { model: db.payment, as: 'payments' } // Tambahkan ini untuk menyertakan data pembayaran
-          ] 
-        }
-      ]
-    });
-    if (!batch) {
-      return res.status(404).json({ 
-          status : false,
-          message: 'Batch tidak ditemukan.'
+      return res.status(201).json({
+        status: true,
+        data: result
+      });
+    } catch (error) {
+      await transaction.rollback();
+      console.error('Error creating batch:', error);
+      return res.status(500).json({
+        status: false,
+        message: 'Failed to create batch',
+        error: error.message
       });
     }
-    const plainBatches = batch.map(b => b.toJSON());
-    const formatedBatch = plainBatches.map((batch) => {
-      return {
-        ...batch,
-        participants: batch.participants.map((participant) => {
-          let picture = `http://localhost:5000${participant.user.picture}`
-          if (!participant.user.picture) {
-            picture = generateProfilePic(participant.user.name || participant.user.email)
-          }
-          return {
-            name: participant.user.name,
-            profilePic: picture,
-            ...participant // Sertakan sisa data participant, termasuk pembayaran
-          };
-        }),
-      };
-    });
+  },
 
-    res.status(200).json({
-      status : true,
-      message: 'Batch berhasil diambil.',
-      data: formatedBatch[0]
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+  getAllBatches: async (req, res) => {
+    try {
+      const { status, type } = req.query;
+      const where = {};
+      
+      if (status) where.status = status;
+      if (type) where.type = type;
 
-// UPDATE: Mengubah data batch (hanya admin)
-exports.updateBatch = async (req, res, next) => {
-  try {
-    const batch = await db.batch.findByPk(req.params.idBatch);
-    if (!batch) {
-      return res.status(404).json({ status :false, message: 'Batch tidak ditemukan.' });
+      const batches = await batch.findAll({
+        where,
+        include: [
+          { model: batchsession, as: 'sessions' },
+          { model: user, as: 'creator', attributes: ['uid', 'name'] }
+        ],
+        order: [['createdAt', 'DESC']]
+      });
+
+      return res.status(200).json({
+        status: true,
+        data: batches
+      });
+    } catch (error) {
+      console.error('Error fetching batches:', error);
+      return res.status(500).json({
+        status: false,
+        message: 'Failed to fetch batches',
+        error: error.message
+      });
     }
-    await batch.update(req.body, { user: req.user });
-    res.status(200).json({
-        status : false,
-      message: 'Batch berhasil diperbarui.',
-      data: batch
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+  },
 
-// DELETE: Menghapus batch (hanya admin)
-exports.deleteBatch = async (req, res, next) => {
-  try {
-    const batch = await db.batch.findByPk(req.params.idBatch);
-    if (!batch) {
-      return res.status(404).json({ status:false,message: 'Batch tidak ditemukan.' });
+  getBatchById: async (req, res) => {
+    try {
+      const { idBatch } = req.params;
+      const data = await batch.findByPk(idBatch, {
+        include: [
+          { model: batchsession, as: 'sessions' },
+          { model: user, as: 'creator', attributes: ['uid', 'name', 'email'] }
+        ]
+      });
+
+      if (!data) {
+        return res.status(404).json({
+          status: false,
+          message: 'Batch not found'
+        });
+      }
+
+      return res.status(200).json({
+        status: true,
+        data
+      });
+    } catch (error) {
+      return res.status(500).json({
+        status: false,
+        message: 'Failed to fetch batch details',
+        error: error.message
+      });
     }
-    await batch.destroy({ user: req.user });
-    res.status(200).json({ status:true, message: 'Batch berhasil dihapus.' });
-  } catch (error) {
-    next(error);
+  },
+
+  updateBatch: async (req, res) => {
+    try {
+      const { idBatch } = req.params;
+      const updateData = req.body;
+
+      // Prevent updating idBatch or created_by directly via this endpoint if needed
+      delete updateData.idBatch;
+      delete updateData.created_by;
+
+      const [updated] = await batch.update(updateData, {
+        where: { idBatch }
+      });
+
+      if (!updated) {
+        return res.status(404).json({
+          status: false,
+          message: 'Batch not found or no changes made'
+        });
+      }
+
+      const updatedBatch = await batch.findByPk(idBatch);
+      return res.status(200).json({
+        status: true,
+        data: updatedBatch
+      });
+    } catch (error) {
+      return res.status(500).json({
+        status: false,
+        message: 'Failed to update batch',
+        error: error.message
+      });
+    }
+  },
+
+  deleteBatch: async (req, res) => {
+    try {
+      const { idBatch } = req.params;
+      const deleted = await batch.destroy({
+        where: { idBatch }
+      });
+
+      if (!deleted) {
+        return res.status(404).json({
+          status: false,
+          message: 'Batch not found'
+        });
+      }
+
+      return res.status(200).json({
+        status: true,
+        message: 'Batch deleted successfully'
+      });
+    } catch (error) {
+      return res.status(500).json({
+        status: false,
+        message: 'Failed to delete batch',
+        error: error.message
+      });
+    }
   }
 };

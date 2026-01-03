@@ -18,6 +18,19 @@ module.exports = {
         return res.status(404).json({ status: false, message: 'Batch not found' });
       }
       
+      // Cek ketersediaan kursi (jika dibatasi)
+      if (batch.max_participants !== null) {
+        const currentCount = await db.batchparticipant.count({
+          where: { batchId },
+          transaction: t
+        });
+
+        if (currentCount >= batch.max_participants) {
+          await t.rollback();
+          return res.status(400).json({ status: false, message: 'Batch is full. Maximum participants reached.' });
+        }
+      }
+
       // Validasi harga batch
       if (batch.price <= 0) {
         await t.rollback();

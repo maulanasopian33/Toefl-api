@@ -16,6 +16,8 @@ module.exports = (sequelize, DataTypes) => {
       this.hasMany(models.group, { foreignKey: "batchId", as: "groups" });
       this.hasMany(models.userresult, { foreignKey: "batchId", as: "results" });
       this.hasMany(models.useranswer, { foreignKey: "batchId", as: "answers" });
+      this.hasMany(models.batchsession, { foreignKey: "batch_id", as: "sessions" });
+      this.belongsTo(models.user, { foreignKey: "created_by", as: "creator" });
     }
   }
   batch.init({
@@ -24,20 +26,36 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
       allowNull: false,
     },
-    namaBatch: DataTypes.STRING,
-    price: DataTypes.DECIMAL,
-    deskripsiBatch: DataTypes.TEXT,
-    tanggalMulai: DataTypes.DATE,
-    duration: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 3600, // dalam detik (contoh: 1 jam)
-      comment: 'Durasi ujian dalam detik'
+    name: DataTypes.STRING,
+    description: DataTypes.TEXT,
+    type: {
+      type: DataTypes.ENUM('PREP_CLASS', 'TRYOUT_ONLY', 'FULL_PACKAGE'),
+      defaultValue: 'PREP_CLASS'
     },
-    tanggalSelesai: DataTypes.DATE,
-    batasMaksimalPeserta: DataTypes.INTEGER,
-    statusBatch: DataTypes.STRING,
-    intruksiKhusus: DataTypes.TEXT
+    start_date: DataTypes.DATE,
+    end_date: DataTypes.DATE,
+    registration_open_at: DataTypes.DATE,
+    registration_close_at: DataTypes.DATE,
+    max_participants: DataTypes.INTEGER,
+    min_participants: DataTypes.INTEGER,
+    status: {
+      type: DataTypes.ENUM('DRAFT', 'OPEN', 'CLOSED', 'RUNNING', 'FINISHED', 'CANCELLED'),
+      defaultValue: 'DRAFT'
+    },
+    price: {
+      type: DataTypes.INTEGER,
+      comment: 'Harga dalam Rupiah tanpa desimal'
+    },
+    currency: {
+      type: DataTypes.STRING,
+      defaultValue: 'IDR'
+    },
+    duration_minutes: {
+      type: DataTypes.INTEGER,
+      comment: 'Total durasi program dalam menit'
+    },
+    special_instructions: DataTypes.TEXT,
+    created_by: DataTypes.STRING // FK to user.uid
   }, {
     sequelize,
     modelName: 'batch', 

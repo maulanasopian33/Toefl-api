@@ -24,7 +24,7 @@ module.exports = (sequelize, DataTypes) => {
     batch_id: DataTypes.STRING,
     title: DataTypes.STRING,
     session_type: {
-      type: DataTypes.ENUM('CLASS', 'TRYOUT', 'DISCUSSION'),
+      type: DataTypes.ENUM('CLASS', 'TRYOUT', 'DISCUSSION', 'CONSULTATION'),
       defaultValue: 'CLASS'
     },
     start_at: DataTypes.DATE,

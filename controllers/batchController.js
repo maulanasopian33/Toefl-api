@@ -124,7 +124,7 @@ module.exports = {
             as: "participants", 
             include: [
               { model: user, as: "user", attributes: ['name', 'email', 'picture'] },
-              { model: payment, as: 'payments' } // Tambahkan ini untuk menyertakan data pembayaran
+              { model: payment, as: 'payments' }, // Tambahkan ini untuk menyertakan data pembayaran
             ] 
           }
         ]
@@ -137,9 +137,59 @@ module.exports = {
         });
       }
 
+      const responseData = data.toJSON();
+
+      // Hitung total pembayaran berdasarkan status
+      let totalPaid = 0;
+      let totalPending = 0;
+      let totalUnpaid = 0;
+
+      let totalUserPaid = 0;
+      let totalUserPending = 0;
+      let totalUserUnpaid = 0;
+
+      if (responseData.participants) {
+        responseData.participants.forEach(participant => {
+          let isParticipantPaid = false;
+          let isParticipantPending = false;
+
+          if (participant.payments) {
+            participant.payments.forEach(p => {
+              const amount = parseFloat(p.amount) || 0;
+              if (p.status === 'paid') {
+                totalPaid += amount;
+                isParticipantPaid = true;
+              } else if (p.status === 'pending') {
+                totalPending += amount;
+                isParticipantPending = true;
+              } else if (p.status === 'failed') {
+                totalUnpaid += amount;
+              }
+            });
+          }
+
+          if (isParticipantPaid) {
+            totalUserPaid++;
+          } else if (isParticipantPending) {
+            totalUserPending++;
+          } else {
+            totalUserUnpaid++;
+          }
+        });
+      }
+      
+      responseData.payments = {
+        totalPaid,
+        totalPending,
+        totalUnpaid,
+        totalUserPaid,
+        totalUserPending,
+        totalUserUnpaid
+      }
+
       return res.status(200).json({
         status: true,
-        data
+        data: responseData
       });
     } catch (error) {
       return res.status(500).json({

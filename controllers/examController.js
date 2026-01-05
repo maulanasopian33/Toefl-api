@@ -40,6 +40,11 @@ exports.getExamData = async (req, res, next) => {
           ], // Include idGroup for keying in FE
           attributes: ['idGroup', 'passage'],
         },
+        {
+          model: db.sectionaudioinstruction,
+          as: 'audioInstructions',
+          attributes: ['audioUrl'],
+        },
       ], // Add attributes from section model
       attributes: ['idSection', 'namaSection', 'deskripsi'],
       order: [
@@ -61,6 +66,7 @@ exports.getExamData = async (req, res, next) => {
         name: section.namaSection,
         type: section.namaSection, // Use namaSection for type as well
         instructions: section.deskripsi, // Frontend will receive HTML escaped
+        audioUrl: section.audioInstructions && section.audioInstructions.length > 0 ? section.audioInstructions[0].audioUrl : null,
         groups: section.groups.map(group => {
           return {
             // 'id' for group is not in the example, but idGroup is useful for FE keys
@@ -115,6 +121,7 @@ exports.updateExamData = async (req, res, next) => {
     const questionsToUpsert = [];
     const optionsToUpsert = [];
     const audioInstructionsToUpsert = [];
+    const sectionAudioInstructionsToUpsert = [];
 
     for (const section of sectionsData) {
       incomingSectionIds.push(section.id);
@@ -124,6 +131,14 @@ exports.updateExamData = async (req, res, next) => {
         deskripsi: section.instructions,
         batchId,
       });
+
+      if (section.audioUrl) {
+        sectionAudioInstructionsToUpsert.push({
+          sectionId: section.id,
+          audioUrl: section.audioUrl,
+          description: `Audio for section ${section.id}`,
+        });
+      }
 
       for (const group of section.groups) {
         incomingGroupIds.push(group.id);
@@ -195,6 +210,11 @@ exports.updateExamData = async (req, res, next) => {
       await db.groupaudioinstruction.destroy({ where: { groupId: { [Op.in]: incomingGroupIds } }, transaction });
     }
 
+    // Hapus SectionAudioInstructions untuk section yang ada di payload (akan dibuat ulang)
+    if (incomingSectionIds.length > 0) {
+      await db.sectionaudioinstruction.destroy({ where: { sectionId: { [Op.in]: incomingSectionIds } }, transaction });
+    }
+
     // Hapus Groups yang tidak ada di payload untuk batch ini
     await db.group.destroy({ where: { batchId: batchId, idGroup: { [Op.notIn]: incomingGroupIds } }, transaction });
 
@@ -209,6 +229,10 @@ exports.updateExamData = async (req, res, next) => {
 
     if (audioInstructionsToUpsert.length > 0) {
       await db.groupaudioinstruction.bulkCreate(audioInstructionsToUpsert, { transaction });
+    }
+
+    if (sectionAudioInstructionsToUpsert.length > 0) {
+      await db.sectionaudioinstruction.bulkCreate(sectionAudioInstructionsToUpsert, { transaction });
     }
 
     await db.question.bulkCreate(questionsToUpsert, { updateOnDuplicate: ["text", "type"], transaction });

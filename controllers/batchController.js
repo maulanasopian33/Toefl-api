@@ -85,7 +85,7 @@ module.exports = {
     try {
       const { status, type } = req.query;
       const where = {};
-      
+
       if (status) where.status = status;
       if (type) where.type = type;
 
@@ -119,22 +119,30 @@ module.exports = {
         include: [
           { model: batchsession, as: 'sessions' },
           { model: user, as: 'creator', attributes: ['uid', 'name', 'email'] },
-          { 
-            model: batchparticipant, 
-            as: "participants", 
+          {
+            model: batchparticipant,
+            as: "participants",
             include: [
               { model: user, as: "user", attributes: ['name', 'email', 'picture'] },
               { model: payment, as: 'payments' }, // Tambahkan ini untuk menyertakan data pembayaran
-            ] 
+            ]
           }
         ]
       });
+
+      console.log(`[DEBUG] getBatchById id=${idBatch} found=${!!data}`);
 
       if (!data) {
         return res.status(404).json({
           status: false,
           message: 'Batch not found'
         });
+      }
+
+      // Explicit safety check
+      if (data === null || data === undefined) {
+        console.error('[CRITICAL] Data is null after check!');
+        return res.status(500).json({ status: false, message: 'Internal Server Error: Data inconsistency' });
       }
 
       const responseData = data.toJSON();
@@ -177,7 +185,7 @@ module.exports = {
           }
         });
       }
-      
+
       responseData.payments = {
         totalPaid,
         totalPending,

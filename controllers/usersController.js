@@ -9,7 +9,7 @@ exports.handleLogin = async (req, res, next) => {
   try {
     const { uid, email, name, picture, email_verified, auth_time } = req.user;
     const localPicturePath = await downloadImage(picture, uid);
-    
+
     // Ambil Role default (user) untuk pengguna baru
     const userRole = await db.role.findOne({ where: { name: 'user' } });
     const defaultRoleId = userRole ? userRole.id : null;
@@ -50,17 +50,17 @@ exports.handleLogin = async (req, res, next) => {
 
     // Ini memastikan token pengguna selalu memiliki claim role yang up-to-date.
     await admin.auth().setCustomUserClaims(uid, { role: roleName });
-    
+
     // Buat objek user yang akan dikirim sebagai respons, pastikan role-nya benar
     const responseUser = { ...req.user, role: roleName };
-    
+
     logger.info({
       message: `User login successful: ${email}`,
       action: created ? 'USER_CREATED' : 'USER_LOGIN',
       user: email,
-      details: { 
+      details: {
         ...responseUser
-       }
+      }
     });
 
     res.status(200).json({
@@ -115,7 +115,7 @@ exports.getUsers = async (req, res, next) => {
           ...user.toJSON(), // Data dari database (termasuk detailuser)
           role: user.role ? user.role.name : null, // Flatten role name
           disabled: firebaseUser.disabled,
-          uuidFb : firebaseUser.uid,
+          uuidFb: firebaseUser.uid,
           fb: firebaseUser
         };
       } catch (error) {
@@ -151,10 +151,10 @@ exports.getUserByUid = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ 
-        status : false,
+      return res.status(404).json({
+        status: false,
         message: "User tidak ditemukan."
-     });
+      });
     }
 
     // 2. Ambil statistik dan data tambahan secara paralel
@@ -168,13 +168,13 @@ exports.getUserByUid = async (req, res) => {
     ] = await Promise.all([
       // Skor Tertinggi
       db.userresult.max('score', { where: { userId: uid } }),
-      
+
       // Total Ujian
       db.userresult.count({ where: { userId: uid } }),
-      
+
       // Total Sertifikat
       db.certificate.count({ where: { userId: uid } }),
-      
+
       // Total Pembayaran (Sum amount where status = 'paid')
       db.payment.sum('amount', {
         where: { status: 'paid' },
@@ -201,9 +201,9 @@ exports.getUserByUid = async (req, res) => {
         order: [['createdAt', 'DESC']]
       })
     ]);
-    
+
     const userData = user.toJSON();
-    
+
     // Format response sesuai permintaan
     const responseData = {
       ...userData,
@@ -217,16 +217,16 @@ exports.getUserByUid = async (req, res) => {
     };
 
     res.status(200).json({
-        status : true,
-        message: "User berhasil diambil.",
-        data: responseData
+      status: true,
+      message: "User berhasil diambil.",
+      data: responseData
     });
   } catch (err) {
     console.error('Error fetching user profile:', err);
-    res.status(500).json({ 
-        status  : false,
-        message: "Terjadi kesalahan saat mengambil data user.",
-        error: err.message
+    res.status(500).json({
+      status: false,
+      message: "Terjadi kesalahan saat mengambil data user.",
+      error: err.message
     });
   }
 };
@@ -290,7 +290,7 @@ exports.changeUserRole = async (req, res, next) => {
 
     // 5. Cabut semua sesi aktif pengguna untuk memaksa login ulang
     await admin.auth().revokeRefreshTokens(uid);
-    
+
     logger.info({
       message: `User role for UID ${uid} changed to ${roleInstance.name}.`,
       action: 'USER_ROLE_CHANGED',
@@ -373,10 +373,13 @@ exports.getJoinedBatches = async (req, res, next) => {
     }
 
     // Format data agar lebih mudah digunakan di frontend
-    const joinedBatches = participations.map(p => ({
-      ...p.batch.toJSON(),
-      paymentStatus: p.payments.length > 0 ? p.payments[0].status : 'not_started',
-    }));
+    // Format data agar lebih mudah digunakan di frontend
+    const joinedBatches = participations
+      .filter(p => p.batch) // Hanya ambil yang data batch-nya masih ada
+      .map(p => ({
+        ...p.batch.toJSON(),
+        paymentStatus: p.payments.length > 0 ? p.payments[0].status : 'not_started',
+      }));
 
     res.status(200).json({
       status: true,

@@ -1,0 +1,9 @@
+###
+POST {{host}}/results/calculate HTTP/1.1
+content-type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "userId" : "q6rCc3YmNMaCQCzHSFwiH3qCtbF3",
+    "batchId" : "BATCH1576"
+}

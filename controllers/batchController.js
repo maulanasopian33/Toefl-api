@@ -21,6 +21,8 @@ module.exports = {
         currency,
         duration_minutes,
         special_instructions,
+        scoring_type,
+        scoring_config,
         sessions // Expecting an array of session objects
       } = req.body;
 
@@ -44,6 +46,8 @@ module.exports = {
         currency,
         duration_minutes,
         special_instructions,
+        scoring_type,
+        scoring_config,
         created_by: createdBy
       }, { transaction });
 

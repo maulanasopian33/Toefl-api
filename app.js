@@ -26,6 +26,7 @@ const mediaRoutes = require('./routes/mediaRoutes');
 const logRoutes = require('./routes/logRoutes');
 const settingRoutes = require('./routes/settingRoutes');
 const rolePermissionRoutes = require('./routes/rolePermissionRoutes');
+const scoringRoutes = require('./routes/scoringRoutes');
 
 
 const { httpLogger } = require('./utils/logger');
@@ -74,6 +75,7 @@ app.use('/media', mediaRoutes);
 app.use('/logs', logRoutes);
 app.use('/settings', settingRoutes);
 app.use('/rbac', rolePermissionRoutes);
+app.use('/scoring-tables', scoringRoutes);
 // Middleware untuk menangani route yang tidak ditemukan (404 Not Found)
 app.use((req, res, next) => {
   const error = new Error('Not Found');

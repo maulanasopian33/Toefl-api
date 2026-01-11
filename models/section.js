@@ -15,6 +15,8 @@ module.exports = (sequelize, DataTypes) => {
       this.hasMany(models.group, { foreignKey: "sectionId", as: "groups" });
       this.hasMany(models.question, { foreignKey: "sectionId", as: "questions" });
       this.hasMany(models.useranswer, { foreignKey: "sectionId", as: "answers" });
+      this.belongsTo(models.scoringtable, { foreignKey: "scoring_table_id", as: "scoringTable" });
+      this.hasMany(models.scoringdetail, { foreignKey: "section_category", sourceKey: "idSection", as: "scoringDetails" });
     }
   }
   section.init({
@@ -26,7 +28,8 @@ module.exports = (sequelize, DataTypes) => {
     namaSection: DataTypes.STRING,
     deskripsi: DataTypes.TEXT,
     urutan: DataTypes.INTEGER,
-    batchId: DataTypes.STRING
+    batchId: DataTypes.STRING,
+    scoring_table_id: DataTypes.INTEGER
   }, {
     sequelize,
     modelName: 'section',

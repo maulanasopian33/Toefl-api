@@ -18,7 +18,7 @@ module.exports = (sequelize, DataTypes) => {
   }
   useranswer.init({
     userId: DataTypes.STRING,
-    userResultId : DataTypes.INTEGER,
+    userResultId: DataTypes.INTEGER,
     batchId: DataTypes.STRING,
     sectionId: DataTypes.STRING,
     questionId: DataTypes.STRING,
@@ -27,7 +27,7 @@ module.exports = (sequelize, DataTypes) => {
     sequelize,
     modelName: 'useranswer',
   });
-  
+
   // Helper untuk ambil result
   async function getOrCreateUserResult(userId, batchId) {
     const { userresult } = sequelize.models;
@@ -51,7 +51,7 @@ module.exports = (sequelize, DataTypes) => {
       } else {
         result.wrongCount += 1;
       }
-      result.score = result.correctCount * 10; // contoh formula skor
+      result.score = 0; // Score will be calculated by Service or dedicated process
       await result.save();
     } catch (err) {
       console.error('Error in afterCreate hook:', err);
@@ -93,7 +93,7 @@ module.exports = (sequelize, DataTypes) => {
         result.wrongCount -= 1;
       }
 
-      result.score = result.correctCount * 10;
+      result.score = 0; // Score will be recalculated
       await result.save();
     } catch (err) {
       console.error('Error in afterUpdate hook:', err);

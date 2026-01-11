@@ -25,16 +25,37 @@ exports.handleCallback = async (req, res) => {
       const pythonBaseUrl = process.env.PYTHON_SERVICE_BASE_URL || 'http://127.0.0.1:8000';
       const fileUrl = downloadUrl.startsWith('http') ? downloadUrl : `${pythonBaseUrl}${downloadUrl}`;
       
-      // Tentukan lokasi simpan (misal: public/storage/certificates)
+      // === CDN storage config (from env) ===
+      const CDN_STORAGE_DIR = process.env.CDN_STORAGE_DIR || path.join(__dirname, '../public'); // fallback lama
+      const CDN_CERT_SUBDIR = process.env.CDN_CERT_SUBDIR || 'storage/certificates';           // fallback lama
+      const CDN_BASE_URL = (process.env.CDN_BASE_URL || '').replace(/\/+$/, '');              // trim trailing "/"
+      const MKDIR_RECURSIVE = (process.env.CDN_MKDIR_RECURSIVE || 'true').toLowerCase() === 'true';
+
+      // Nama file
       const fileName = `${certificateNumber}.pdf`;
-      const storageDir = path.join(__dirname, '../public/storage/certificates');
-      
-      if (!fs.existsSync(storageDir)) {
+
+      // Folder tujuan di filesystem
+      const storageDir = path.resolve(path.join(CDN_STORAGE_DIR, CDN_CERT_SUBDIR));
+      if (MKDIR_RECURSIVE && !fs.existsSync(storageDir)) {
         fs.mkdirSync(storageDir, { recursive: true });
       }
 
-      const savePath = path.join(storageDir, fileName);
-      const publicPdfUrl = `/storage/certificates/${fileName}`;
+      // Safety: pastikan file benar-benar ditulis di dalam storageDir
+      const savePath = path.resolve(path.join(storageDir, fileName));
+      if (!savePath.startsWith(storageDir + path.sep)) {
+        throw new Error('Invalid savePath (path traversal detected)');
+      }
+
+      // URL publik yang disimpan ke DB
+      let publicPdfUrl;
+      if (CDN_BASE_URL) {
+        // hasil: https://cdn.lbaiuqi.com/sertifikat/xxx.pdf
+        publicPdfUrl = `${CDN_BASE_URL}/${CDN_CERT_SUBDIR.replace(/^\/+/, '').replace(/\/+$/, '')}/${encodeURIComponent(fileName)}`;
+      } else {
+        // fallback: relative url (kalau kamu masih serve dari app)
+        publicPdfUrl = `/${CDN_CERT_SUBDIR.replace(/^\/+/, '').replace(/\/+$/, '')}/${encodeURIComponent(fileName)}`;
+      }
+
 
       // Stream download file
       const response = await axios({

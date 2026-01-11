@@ -1,7 +1,7 @@
 'use strict';
 const {
   Model
-} = require('sequelize'); 
+} = require('sequelize');
 const { logger } = require('../utils/logger');
 module.exports = (sequelize, DataTypes) => {
   class batch extends Model {
@@ -55,10 +55,18 @@ module.exports = (sequelize, DataTypes) => {
       comment: 'Total durasi program dalam menit'
     },
     special_instructions: DataTypes.TEXT,
-    created_by: DataTypes.STRING // FK to user.uid
+    created_by: DataTypes.STRING, // FK to user.uid
+    scoring_type: {
+      type: DataTypes.ENUM('SCALE', 'RAW'),
+      defaultValue: 'SCALE'
+    },
+    scoring_config: {
+      type: DataTypes.JSON,
+      comment: 'Configuration for scoring, e.g., initial value for RAW type'
+    }
   }, {
     sequelize,
-    modelName: 'batch', 
+    modelName: 'batch',
     hooks: {
       afterCreate: (instance, options) => {
         logger.info({

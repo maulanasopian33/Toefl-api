@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { Op, literal } = require('sequelize');
 const { logger } = require('../utils/logger');
 const { generateInvoiceNumber } = require('../utils/invoiceGenerator');
+const storageUtil = require('../utils/storage');
 
 module.exports = {
   async getAllPayments(req, res, next) {
@@ -341,7 +342,7 @@ module.exports = {
       let { imageUrl } = req.body; // Bisa dari body jika kirim URL string
 
       if (req.file) {
-        imageUrl = `/uploads/${req.file.filename}`; // Ambil dari file upload jika ada
+        imageUrl = `/uploads/${req.file.filename}`;
       }
 
       if (!imageUrl) {

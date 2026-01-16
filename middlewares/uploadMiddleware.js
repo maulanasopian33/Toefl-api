@@ -4,11 +4,10 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+const storageUtil = require('../utils/storage');
+
 // Pastikan direktori uploads ada
-const uploadDir = path.join(__dirname, '../public/uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+const uploadDir = storageUtil.ensureDir('uploads');
 
 // Konfigurasi penyimpanan Multer
 const storage = multer.diskStorage({

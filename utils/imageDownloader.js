@@ -9,17 +9,8 @@ const downloadImage = async (url, uid) => {
       return null;
     }
 
-    const publicDir = path.join(__dirname, '../public');
-    const avatarsDir = path.join(publicDir, 'images', 'avatar');
-
-    // Buat direktori jika belum ada
-    if (!fs.existsSync(publicDir)) {
-      fs.mkdirSync(publicDir);
-    }
-    if (!fs.existsSync(avatarsDir)) {
-      fs.mkdirSync(avatarsDir, { recursive: true });
-    }
-
+    const storageUtil = require('./storage');
+    const avatarsDir = storageUtil.ensureDir(path.join('images', 'avatar'));
     const imagePath = path.join(avatarsDir, `${uid}.png`);
 
     const response = await axios({
@@ -31,7 +22,7 @@ const downloadImage = async (url, uid) => {
     response.data.pipe(writer);
 
     return new Promise((resolve, reject) => {
-      writer.on('finish', () => resolve(`/images/avatar/${uid}.png`));
+      writer.on('finish', () => resolve(storageUtil.getPublicUrl(`images/avatar/${uid}.png`)));
       writer.on('error', (err) => {
         console.error('Error saat mengunduh gambar:', err);
         reject(null);

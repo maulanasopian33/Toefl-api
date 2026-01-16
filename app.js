@@ -51,7 +51,8 @@ app.use(morgan('combined', { stream: httpLogger.stream }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+const storageUtil = require('./utils/storage');
+app.use(express.static(storageUtil.getStorageDir()));
 
 app.use('/', indexRouter);
 app.use('/users', usersRouter);

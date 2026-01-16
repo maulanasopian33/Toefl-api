@@ -5,6 +5,7 @@ const path = require('path');
 const db = require('../models');
 const { Op } = require('sequelize');
 const { logger } = require('../utils/logger');
+const storageUtil = require('../utils/storage');
 
 /**
  * Mengelola unggahan file media.
@@ -16,7 +17,7 @@ exports.uploadFile = async (req, res, next) => {
       return res.status(400).json({ status: false, message: 'Tidak ada file yang diunggah.' });
     }
 
-    const fileUrl = `/uploads/${req.file.filename}`; // Simpan sebagai path relatif
+    const fileUrl = `/uploads/${req.file.filename}`
 
     // Simpan metadata ke database
     const media = await db.media.create({
@@ -82,7 +83,7 @@ exports.deleteMedia = async (req, res, next) => {
     }
 
     // Hapus file dari file system
-    const filePath = path.join(__dirname, '../public', media.url);
+    const filePath = storageUtil.resolvePath(media.url);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }

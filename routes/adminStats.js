@@ -7,4 +7,8 @@ const adminStatsController = require('../controllers/adminStatsController');
 router.get('/stats', /*authAdmin,*/ adminStatsController.getStats);
 router.get('/financial-recap', /*authAdmin,*/ adminStatsController.getFinancialRecap);
 
+// New Endpoint for Candidates
+const resultController = require('../controllers/resultController');
+router.get('/results/candidates', resultController.getCandidates);
+
 module.exports = router;

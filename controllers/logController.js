@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const { logger } = require('../utils/logger');
 
 /**
  * Mengambil log berdasarkan tanggal.
@@ -63,6 +64,37 @@ exports.getLogsByDate = async (req, res, next) => {
     }
 
     res.status(200).json({ status: true, message: `Log untuk tanggal ${date} berhasil diambil.`, data: logs });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Menyimpan log yang dikirim dari Frontend.
+ * Route: POST /logs/client
+ */
+exports.saveClientLog = async (req, res, next) => {
+  try {
+    const { level = 'info', message, metadata = {} } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ status: false, message: 'Log message is required.' });
+    }
+
+    // Capture User Info if available from middleware
+    const userId = req.user ? req.user.uid : 'anonymous';
+    
+    // Log to winston using the existing application log transport
+    logger.log({
+      level: level,
+      message: message,
+      source: 'frontend',
+      userId: userId,
+      ...metadata,
+      timestamp: new Date()
+    });
+
+    res.status(201).json({ status: true, message: 'Client log saved successfully.' });
   } catch (error) {
     next(error);
   }

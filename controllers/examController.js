@@ -4,6 +4,7 @@ const { Op } = require('sequelize');
 const db = require('../models');
 const { sequelize } = require('../models');
 const { logger } = require('../utils/logger');
+const crypto = require('crypto');
 
 /**
  * Mengambil seluruh data ujian (sections, groups, questions, options)
@@ -166,16 +167,19 @@ exports.updateExamData = async (req, res, next) => {
             groupId: group.id,
           });
 
-          for (const optionText of question.options) {
+          question.options.forEach((optionText, index) => {
             // Buat ID unik dan deterministik untuk opsi
-            const idOption = `${question.id}-${optionText.substring(0, 10).replace(/\s/g, '')}`;
+            // Gunakan MD5 hash dari teks untuk memastikan ID stabil tapi tetap unik
+            const hash = crypto.createHash('md5').update(optionText.trim()).digest('hex').substring(0, 8);
+            const idOption = `opt-${question.id}-${index}-${hash}`;
+            
             optionsToUpsert.push({
               idOption,
               text: optionText,
-              isCorrect: optionText === question.correctAnswer,
+              isCorrect: optionText.trim() === question.correctAnswer?.trim(),
               questionId: question.id,
             });
-          }
+          });
         }
       }
     }

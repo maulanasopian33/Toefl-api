@@ -29,7 +29,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           source: "./*"
-          target: "/var/www/html/app/toafl"
+          target: "/var/www/html/api/toafl-api"
           overwrite: true
           rm: false # Jangan hapus folder target sepenuhnya agar tidak downtime lama, rsync lebih baik tapi scp ok jika overwrite true
           strip_components: 0
@@ -42,6 +42,6 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           script: |
-            cd /var/www/html/app/toafl
+            cd /var/www/html/api/toafl-api
             npm install --production
             pm2 restart api-toafl || pm2 start bin/www --name api-toafl

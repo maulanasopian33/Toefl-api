@@ -1,0 +1,13 @@
+LATEST UPDATES - 26 Januari 2026
+==============================
+
+1. MENAMBAHKAN TOTAL SECTION, GROUP, DAN SOAL PADA DETAIL BATCH
+   - Menambahkan include model section, group, dan question pada endpoint getBatchById.
+   - Menambahkan nested include question di dalam group untuk menangani soal yang dikelompokkan (passage/grouping).
+   - Menghitung total group dan total soal untuk masing-masing section (akumulasi dari soal langsung di section dan soal di dalam group).
+   - Menghitung total group dan total soal keseluruhan untuk satu batch.
+   - Mengupdate response data untuk menyertakan informasi total tersebut.
+   - Menambahkan unit test untuk memverifikasi perhitungan total dengan skenario nested questions.
+   - File yang disentuh: controllers/batchController.js, tests/batchDetails.test.js
+
+Timestamp: 2026-01-26 11:00:00

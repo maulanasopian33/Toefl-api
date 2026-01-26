@@ -1,4 +1,4 @@
-const { batch, batchsession, user, sequelize, batchparticipant, payment } = require('../models');
+const { batch, batchsession, user, sequelize, batchparticipant, payment, section, group, question } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 
@@ -130,6 +130,18 @@ module.exports = {
               { model: user, as: "user", attributes: ['name', 'email', 'picture'] },
               { model: payment, as: 'payments' }, // Tambahkan ini untuk menyertakan data pembayaran
             ]
+          },
+          {
+            model: section,
+            as: 'sections',
+            include: [
+              { 
+                model: group, 
+                as: 'groups',
+                include: [{ model: question, as: 'questions' }]
+              },
+              { model: question, as: 'questions' }
+            ]
           }
         ]
       });
@@ -198,6 +210,36 @@ module.exports = {
         totalUserPending,
         totalUserUnpaid
       }
+
+      // Hitung total group dan soal per section dan global
+      let totalGroups = 0;
+      let totalQuestions = 0;
+
+      if (responseData.sections) {
+        responseData.sections = responseData.sections.map(sec => {
+          const sectionGroupsCount = sec.groups ? sec.groups.length : 0;
+          
+          // Hitung soal dari dua sumber: langsung di section dan di dalam groups
+          const directQuestionsCount = sec.questions ? sec.questions.length : 0;
+          const groupedQuestionsCount = sec.groups ? sec.groups.reduce((acc, g) => {
+            return acc + (g.questions ? g.questions.length : 0);
+          }, 0) : 0;
+
+          const sectionQuestionsCount = directQuestionsCount + groupedQuestionsCount;
+
+          totalGroups += sectionGroupsCount;
+          totalQuestions += sectionQuestionsCount;
+
+          return {
+            ...sec,
+            totalGroups: sectionGroupsCount,
+            totalQuestions: sectionQuestionsCount
+          };
+        });
+      }
+
+      responseData.totalGroups = totalGroups;
+      responseData.totalQuestions = totalQuestions;
 
       return res.status(200).json({
         status: true,

@@ -11,3 +11,11 @@ LATEST UPDATES - 26 Januari 2026
    - File yang disentuh: controllers/batchController.js, tests/batchDetails.test.js
 
 Timestamp: 2026-01-26 11:00:00
+
+2. MENAMBAHKAN GITHUB ACTION UNTUK DEPLOYMENT
+   - Membuat workflow `.github/workflows/toafl.yml` untuk deployment aplikasi TOAFL.
+   - Membuat workflow `.github/workflows/toefl.yml` untuk deployment aplikasi TOEFL.
+   - Workflow mencakup checkout repo, upload file ke VPS menggunakan SCP, menjalankan `npm install --production` di server melalui SSH, dan inisialisasi/restart PM2.
+   - Deployment dipicu oleh push tags `toafl-v*` dan `toefl-v*`.
+
+Timestamp: 2026-01-26 20:30:00

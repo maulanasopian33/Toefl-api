@@ -1,0 +1,47 @@
+name: Deploy TOAFL App
+
+on:
+  push:
+    tags:
+      - "toafl-v*"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      # Kita tidak jalankan npm install di sini karena user ingin install di server
+      # Kita upload semua file kecuali node_modules, .git, dll.
+
+      - name: Upload code to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          source: "./*"
+          target: "/var/www/html/app/toafl"
+          overwrite: true
+          rm: false # Jangan hapus folder target sepenuhnya agar tidak downtime lama, rsync lebih baik tapi scp ok jika overwrite true
+          strip_components: 0
+
+      - name: Install dependencies and Restart PM2 on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            cd /var/www/html/app/toafl
+            npm install --production
+            pm2 restart api-toafl || pm2 start bin/www --name api-toafl

@@ -28,7 +28,10 @@ module.exports = (sequelize, DataTypes) => {
     namaSection: DataTypes.STRING,
     deskripsi: DataTypes.TEXT,
     urutan: DataTypes.INTEGER,
-    batchId: DataTypes.STRING,
+    batchId: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
     scoring_table_id: DataTypes.INTEGER
   }, {
     sequelize,

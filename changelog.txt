@@ -1,21 +1,36 @@
-LATEST UPDATES - 26 Januari 2026
+LATEST UPDATES - 29 Januari 2026
 ==============================
 
-1. MENAMBAHKAN TOTAL SECTION, GROUP, DAN SOAL PADA DETAIL BATCH
-   - Menambahkan include model section, group, dan question pada endpoint getBatchById.
-   - Menambahkan nested include question di dalam group untuk menangani soal yang dikelompokkan (passage/grouping).
-   - Menghitung total group dan total soal untuk masing-masing section (akumulasi dari soal langsung di section dan soal di dalam group).
-   - Menghitung total group dan total soal keseluruhan untuk satu batch.
-   - Mengupdate response data untuk menyertakan informasi total tersebut.
-   - Menambahkan unit test untuk memverifikasi perhitungan total dengan skenario nested questions.
-   - File yang disentuh: controllers/batchController.js, tests/batchDetails.test.js
+1. IMPLEMENTASI SISTEM SCORING DI FRONTEND
+   - Membuat UI manajemen tabel konversi skor (Scoring Tables) untuk admin.
+   - Menambahkan fitur CRUD tabel scoring beserta detail konversi per section category.
+   - Mengintegrasikan pemilihan tabel scoring pada modal pengaturan section di Exam Editor.
+   - File yang disentuh: nuxt-fe/composables/useScoring.ts, TableForm.vue, Scoring Tables pages.
 
-Timestamp: 2026-01-26 11:00:00
+Timestamp: 2026-01-29 10:00:00
 
-2. MENAMBAHKAN GITHUB ACTION UNTUK DEPLOYMENT
-   - Membuat workflow `.github/workflows/toafl.yml` untuk deployment aplikasi TOAFL.
-   - Membuat workflow `.github/workflows/toefl.yml` untuk deployment aplikasi TOEFL.
-   - Workflow mencakup checkout repo, upload file ke VPS menggunakan SCP, menjalankan `npm install --production` di server melalui SSH, dan inisialisasi/restart PM2.
-   - Deployment dipicu oleh push tags `toafl-v*` dan `toefl-v*`.
+2. IMPLEMENTASI SISTEM BANK SOAL (QUESTION BANK)
+   - Melakukan migrasi database untuk membuat `batchId` pada tabel `sections` dan `groups` menjadi nullable.
+   - Membuat `BankService.js` untuk logika *Deep Cloning*.
+   - Menambahkan API endpoint `/bank`.
+   - Membuat halaman manajemen Bank Soal di frontend.
+   - Menambahkan fitur "Promote to Template" dan "Import from Bank" pada Exam Editor.
+   - Perbaikan UI: Halaman detail Bank Soal untuk pratinjau.
+   - File yang disentuh: node-be/*, nuxt-fe/pages/admin/bank/soal/*, ExamEditor components.
 
-Timestamp: 2026-01-26 20:30:00
+Timestamp: 2026-01-29 11:00:00
+
+3. IMPLEMENTASI SISTEM EXAM LOCKING (INTEGRITY PROTECTION)
+   - Menambahkan logika pengecekan integritas pada backend (`examController.js`).
+   - Ujian otomatis terkunci (Read-Only) jika:
+     a) Sudah ada siswa yang mengirimkan jawaban (mencegah penghapusan nilai).
+     b) Waktu ujian (`start_date`) sudah dimulai.
+   - Backend menolak request PUT/Update jika kondisi lock terpenuhi.
+   - Frontend menampilkan Banner Peringatan berwarna kuning jika ujian terkunci.
+   - Tombol "Simpan Perubahan" otomatis dinonaktifkan (disabled) saat terkunci.
+   - File yang disentuh: 
+     - node-be/controllers/examController.js
+     - nuxt-fe/composables/useExamData.ts
+     - nuxt-fe/components/ExamEditor/ExamEditor.vue
+
+Timestamp: 2026-01-29 11:10:00

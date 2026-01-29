@@ -14,6 +14,13 @@ exports.getExamData = async (req, res, next) => {
   try {
     const { examId } = req.params;
 
+    // 1. Cek status lock (apakah sudah mulai atau sudah ada pengerjaan)
+    const batch = await db.batch.findByPk(examId, { attributes: ['start_date', 'status'] });
+    const submissionCount = await db.userresult.count({ where: { batchId: examId } });
+    
+    // Lock jika: sudah ada pengerjaan OR sudah masuk waktu mulai
+    const isLocked = submissionCount > 0 || (batch?.start_date && new Date(batch.start_date) <= new Date());
+
     const sections = await db.section.findAll({
       where: { batchId: { [Op.eq]: examId } },
       include: [
@@ -92,7 +99,13 @@ exports.getExamData = async (req, res, next) => {
       };
     });
 
-    res.status(200).json(formattedData);
+    // Send response with locking metadata
+    res.status(200).json({
+      status: true,
+      isLocked: !!isLocked,
+      lockReason: submissionCount > 0 ? 'SUBMISSIONS_EXIST' : (batch?.start_date && new Date(batch.start_date) <= new Date() ? 'BATCH_STARTED' : null),
+      data: formattedData
+    });
   } catch (error) {
     next(error);
   }
@@ -107,6 +120,18 @@ exports.updateExamData = async (req, res, next) => {
   try {
     const { examId: batchId } = req.params;
     const sectionsData = req.body;
+
+    // --- 0. Cek Locking ---
+    const batch = await db.batch.findByPk(batchId, { attributes: ['start_date'] });
+    const submissionCount = await db.userresult.count({ where: { batchId } });
+    const isLocked = submissionCount > 0 || (batch?.start_date && new Date(batch.start_date) <= new Date());
+
+    if (isLocked) {
+      return res.status(403).json({ 
+        status: false, 
+        message: "Ujian terkunci karena sudah ada pengerjaan atau waktu ujian telah dimulai." 
+      });
+    }
 
     if (!Array.isArray(sectionsData)) {
       return res.status(400).json({ message: "Struktur data yang dikirim tidak valid. Body harus berupa array." });

@@ -23,7 +23,10 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
     },
     passage: DataTypes.TEXT,
-    batchId: DataTypes.STRING,
+    batchId: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
     sectionId: DataTypes.STRING
   }, {
     sequelize,

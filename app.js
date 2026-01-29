@@ -46,6 +46,31 @@ app.set('view engine', 'ejs');
 
 app.use(cors(corsOptions));
 
+// Security Headers
+const helmet = require('helmet');
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow resource loading from other origins if needed (e.g., images)
+}));
+
+// Rate Limiting
+const rateLimit = require('express-rate-limit');
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  message: { status: false, message: 'Terlalu banyak permintaan, silakan coba lagi nanti.' }
+});
+app.use(limiter);
+
+// Specific limiter for login to prevent brute force
+const loginLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 5,
+  message: { status: false, message: 'Terlalu banyak percobaan login, silakan tunggu 1 menit.' }
+});
+app.use('/auth/login', loginLimiter);
+
 // Gunakan morgan untuk HTTP request logging dan arahkan outputnya ke Winston
 app.use(morgan('combined', { stream: httpLogger.stream }));
 

@@ -67,6 +67,7 @@ exports.getExamData = async (req, res, next) => {
       return res.status(404).json({ message: `Ujian dengan ID ${examId} tidak ditemukan.` });
     }
 
+   logger.info('Sections:', sections);
     // Format data sesuai ekspektasi frontend
     const formattedData = sections.map(section => {
       return {
@@ -104,7 +105,7 @@ exports.getExamData = async (req, res, next) => {
       status: true,
       isLocked: !!isLocked,
       lockReason: submissionCount > 0 ? 'SUBMISSIONS_EXIST' : (batch?.start_date && new Date(batch.start_date) <= new Date() ? 'BATCH_STARTED' : null),
-      data: formattedData
+      data: formattedData,
     });
   } catch (error) {
     next(error);
@@ -356,6 +357,11 @@ exports.getSectionData = async (req, res, next) => {
     const section = await db.section.findByPk(sectionId, {
       attributes: ['idSection', 'namaSection', 'deskripsi'],
       include: [{
+        model: db.sectionaudioinstruction,
+        as: 'audioInstructions',
+        attributes: ['audioUrl'],
+      },
+      {
         model: db.group,
         as: 'groups',
         attributes: ['idGroup', 'passage'],
@@ -393,7 +399,7 @@ exports.getSectionData = async (req, res, next) => {
       instructions: section.deskripsi,
       // Cari audio instruction di level section (jika ada)
       // Asumsi: audio instruction untuk section disimpan di group pertama tanpa passage
-      audioInstructions: section.groups?.[0]?.audioInstructions?.[0]?.audioUrl || null,
+      audioInstructions: section.audioInstructions?.[0]?.audioUrl || null,
       groups: section.groups.map(group => ({
         id: group.idGroup,
         passage: group.passage,

@@ -44,3 +44,11 @@ Timestamp: 2026-01-29 11:10:00
    - File yang disentuh: node-be/app.js, node-be/config/config.js, node-be/middlewares/errorHandler.js.
 
 Timestamp: 2026-01-29 11:30:00
+
+5. PENINGKATAN DASHBOARD ADMIN
+   - Perbaikan backend `adminStatsController`: Mengambil data real dari database (bukan dummy), termasuk total user, batch aktif, dan aktivitas terbaru.
+   - Redesign Frontend Dashboard: Tampilan lebih profesional dengan Card Statistik Utama (Users, Active Batch, dll).
+   - Penambahan Tabel Aktivitas: Sidebar aktivitas pendaftaran user terbaru dan transaksi pembayaran terakhir.
+   - File yang disentuh: node-be/controllers/adminStatsController.js, nuxt-fe/pages/admin/index.vue.
+
+Timestamp: 2026-01-29 11:55:00

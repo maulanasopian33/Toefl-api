@@ -1,22 +1,64 @@
-const { batch, group, question, groupAudioInstruction, payment, sequelize } = require('../models');
+const { batch, group, question, groupaudioinstruction: groupAudioInstruction, payment, user, sequelize } = require('../models');
 const { Op } = require('sequelize');
 
 exports.getStats = async (req, res) => {
   try {
-    const batchCount   = await batch.count();
-    const groupCount   = await group.count();
-    const questionCount= await question.count();
-    const audioCount   = await groupAudioInstruction.count();
-
-    res.json({
+    const [
       batchCount,
+      activeBatchCount,
+      finishedBatchCount,
       groupCount,
       questionCount,
-      audioCount
+      audioCount,
+      userCount,
+      recentUsers,
+      recentPayments
+    ] = await Promise.all([
+      batch.count(),
+      batch.count({ where: { status: 'OPEN' } }), // Asumsi status aktif = OPEN
+      batch.count({ where: { status: 'FINISHED' } }),
+      group.count(),
+      question.count(),
+      groupAudioInstruction.count(),
+      user.count(),
+      user.findAll({
+        limit: 5,
+        order: [['createdAt', 'DESC']],
+        attributes: ['name', 'email', 'createdAt']
+      }),
+      payment.findAll({
+        limit: 5,
+        order: [['createdAt', 'DESC']],
+        // include: [{ model: user, as: 'user', attributes: ['name', 'email'] }], // Removed due to missing direct association
+        attributes: ['amount', 'status', 'createdAt']
+      })
+    ]);
+
+    // Trend user monthly (simple 6 months back)
+    // Note: Complex aggregation is better done with raw query for performance on large datasets
+    // For now, returning simple counts.
+
+    res.json({
+      status: true,
+      data: {
+        counts: {
+          batch: batchCount,
+          activeBatch: activeBatchCount,
+          finishedBatch: finishedBatchCount,
+          group: groupCount,
+          question: questionCount,
+          audio: audioCount,
+          user: userCount
+        },
+        recentActivity: {
+          users: recentUsers,
+          payments: recentPayments
+        }
+      }
     });
   } catch (err) {
     console.error('Error getStats:', err);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error parsing stats' });
   }
 };
 

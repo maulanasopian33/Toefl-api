@@ -56,9 +56,10 @@ Timestamp: 2026-01-29 11:55:00
 LATEST UPDATES - 02 Februari 2026
 ==============================
 
-1. PENANGANAN ERROR REQUEST ENTITY TOO LARGE
-   - Meningkatkan batas ukuran payload JSON dan URL-encoded menjadi 50MB di `app.js`.
-   - Hal ini memungkinkan penyimpanan data ujian dengan jumlah soal yang banyak tanpa terkena limit default Express (100KB).
-   - File yang disentuh: node-be/app.js
+1. PENANGANAN ERROR REQUEST ENTITY TOO LARGE (Granular & Safe)
+   - Menetapkan batas global payload JSON menjadi 2MB (lebih aman untuk production).
+   - Menerapkan limit khusus 50MB hanya pada route `PUT /exams/:examId` untuk menangani data batch besar.
+   - Hal ini mencegah serangan memory exhaustion pada endpoint lain sambil tetap mendukung penyimpanan soal dalam jumlah banyak.
+   - File yang disentuh: node-be/app.js, node-be/routes/examRoutes.js
 
 Timestamp: 2026-02-02 22:20:00

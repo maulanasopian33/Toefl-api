@@ -74,8 +74,8 @@ app.use('/auth/login', loginLimiter);
 // Gunakan morgan untuk HTTP request logging dan arahkan outputnya ke Winston
 app.use(morgan('combined', { stream: httpLogger.stream }));
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: false }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ limit: '2mb', extended: false }));
 app.use(cookieParser());
 const storageUtil = require('./utils/storage');
 app.use(express.static(storageUtil.getStorageDir()));

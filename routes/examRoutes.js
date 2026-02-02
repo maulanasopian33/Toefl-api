@@ -26,10 +26,13 @@ router.get('/history/:historyId', checkAuth, checkPermission('batch.user'), exam
 
 // --- Endpoint untuk Editor/Admin ---
 
+// Tambahkan parser khusus dengan limit besar untuk batch data yang banyak
+const largeJsonParser = express.json({ limit: '50mb' });
+
 // Mengambil seluruh data ujian untuk editor (termasuk jawaban)
 router.get('/:examId', checkAuth, checkPermission('batch.update'), examController.getExamData);
 
-// Menyimpan (memperbarui) seluruh data ujian dari editor
-router.put('/:examId', checkAuth, checkPermission('batch.update'), examController.updateExamData);
+// Menyimpan (memperbarui) seluruh data ujian dari editor dengan limit payload 50MB
+router.put('/:examId', checkAuth, checkPermission('batch.update'), largeJsonParser, examController.updateExamData);
 
 module.exports = router;

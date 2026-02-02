@@ -62,4 +62,10 @@ LATEST UPDATES - 02 Februari 2026
    - Hal ini mencegah serangan memory exhaustion pada endpoint lain sambil tetap mendukung penyimpanan soal dalam jumlah banyak.
    - File yang disentuh: node-be/app.js, node-be/routes/examRoutes.js
 
-Timestamp: 2026-02-02 22:20:00
+2. PROTEKSI FILE KONFIGURASI PADA DEPLOYMENT
+   - Memperbarui workflow GitHub Actions (`toafl.yml` & `toefl.yml`) untuk mengecualikan file `.env`, `config/config.js`, dan `config/cors.js`.
+   - Menambahkan step `rm -f` pada runner sebelum proses upload ke VPS.
+   - Hal ini memastikan konfigurasi yang sudah ada di server production tidak tertimpa oleh file default dari repo saat deployment.
+   - File yang disentuh: .github/workflows/toafl.yml, .github/workflows/toefl.yml
+
+Timestamp: 2026-02-02 22:30:00

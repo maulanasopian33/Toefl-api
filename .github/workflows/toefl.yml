@@ -18,6 +18,9 @@ jobs:
         with:
           node-version: 20
 
+      - name: Remove config files to prevent overwriting production
+        run: rm -f .env config/config.js config/cors.js
+
       - name: Upload code to VPS
         uses: appleboy/scp-action@v0.1.7
         with:

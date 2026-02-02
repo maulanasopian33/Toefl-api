@@ -18,8 +18,8 @@ jobs:
         with:
           node-version: 20
 
-      # Kita tidak jalankan npm install di sini karena user ingin install di server
-      # Kita upload semua file kecuali node_modules, .git, dll.
+      - name: Remove config files to prevent overwriting production
+        run: rm -f .env config/config.js config/cors.js
 
       - name: Upload code to VPS
         uses: appleboy/scp-action@v0.1.7

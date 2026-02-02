@@ -52,3 +52,13 @@ Timestamp: 2026-01-29 11:30:00
    - File yang disentuh: node-be/controllers/adminStatsController.js, nuxt-fe/pages/admin/index.vue.
 
 Timestamp: 2026-01-29 11:55:00
+
+LATEST UPDATES - 02 Februari 2026
+==============================
+
+1. PENANGANAN ERROR REQUEST ENTITY TOO LARGE
+   - Meningkatkan batas ukuran payload JSON dan URL-encoded menjadi 50MB di `app.js`.
+   - Hal ini memungkinkan penyimpanan data ujian dengan jumlah soal yang banyak tanpa terkena limit default Express (100KB).
+   - File yang disentuh: node-be/app.js
+
+Timestamp: 2026-02-02 22:20:00

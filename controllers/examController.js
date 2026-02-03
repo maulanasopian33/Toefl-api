@@ -38,7 +38,7 @@ exports.getExamData = async (req, res, next) => {
                   attributes: ['idOption', 'text', 'isCorrect'],
                 },
               ], // Include type from question model
-              attributes: ['idQuestion', 'text', 'type'],
+              attributes: ['idQuestion', 'text', 'type', 'audioUrl'],
             },
             {
               model: db.groupaudioinstruction,
@@ -90,6 +90,7 @@ exports.getExamData = async (req, res, next) => {
                 id: question.idQuestion,
                 type: question.type || section.namaSection, // Use question type, fallback to section name
                 question: question.text, // Frontend will receive HTML escaped
+                audioUrl: question.audioUrl,
                 options: question.options.map(opt => opt.text),
                 correctAnswer: correctOption ? correctOption.text : null,
                 userAnswer: null, // Add userAnswer as requested by FE structure
@@ -191,6 +192,7 @@ exports.updateExamData = async (req, res, next) => {
             text: question.question,
             type: question.type,
             groupId: group.id,
+            audioUrl: question.audioUrl,
           });
 
           question.options.forEach((optionText, index) => {
@@ -265,7 +267,7 @@ exports.updateExamData = async (req, res, next) => {
       await db.sectionaudioinstruction.bulkCreate(sectionAudioInstructionsToUpsert, { transaction });
     }
 
-    await db.question.bulkCreate(questionsToUpsert, { updateOnDuplicate: ["text", "type"], transaction });
+    await db.question.bulkCreate(questionsToUpsert, { updateOnDuplicate: ["text", "type", "audioUrl"], transaction });
 
     if (optionsToUpsert.length > 0) {
       await db.option.bulkCreate(optionsToUpsert, { transaction });
@@ -373,7 +375,7 @@ exports.getSectionData = async (req, res, next) => {
           {
             model: db.question,
             as: 'questions',
-            attributes: ['idQuestion', 'text'], // 'text' adalah 'question'
+            attributes: ['idQuestion', 'text', 'audioUrl'], // 'text' adalah 'question'
             include: [{
               model: db.option,
               as: 'options',
@@ -407,6 +409,7 @@ exports.getSectionData = async (req, res, next) => {
         questions: group.questions.map(question => ({
           id: question.idQuestion,
           question: question.text,
+          audioUrl: question.audioUrl,
           options: question.options.map(opt => ({
             id: opt.idOption,
             text: opt.text,

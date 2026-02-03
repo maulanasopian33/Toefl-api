@@ -9,7 +9,12 @@ const storage = {
    * Get the base storage directory from environment or fallback to public/
    */
   getStorageDir: () => {
-    return process.env.CDN_STORAGE_DIR || path.join(__dirname, '../public');
+    const dir = process.env.CDN_STORAGE_DIR || path.join(__dirname, '../public');
+    // Tambahkan log untuk debug di production
+    if (process.env.NODE_ENV === 'production') {
+      console.log(`[Storage] Selected dir: ${dir} (process.env.CDN_STORAGE_DIR: ${process.env.CDN_STORAGE_DIR})`);
+    }
+    return dir;
   },
 
   /**

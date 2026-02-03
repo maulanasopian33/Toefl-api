@@ -25,7 +25,8 @@ module.exports = (sequelize, DataTypes) => {
     text: DataTypes.TEXT,
     type: DataTypes.STRING,
     groupId: DataTypes.STRING,
-    sectionId: DataTypes.STRING
+    sectionId: DataTypes.STRING,
+    audioUrl: DataTypes.STRING
   }, {
     sequelize,
     modelName: 'question',

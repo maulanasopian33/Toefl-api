@@ -6,12 +6,12 @@ const fs = require('fs');
 
 const storageUtil = require('../utils/storage');
 
-// Pastikan direktori uploads ada
-const uploadDir = storageUtil.ensureDir('uploads');
-
 // Konfigurasi penyimpanan Multer
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
+    // Pastikan direktori uploads ada. 
+    // Menggunakan fungsi dinamis agar variable environment terbaca dengan benar saat runtime.
+    const uploadDir = storageUtil.ensureDir('uploads');
     cb(null, uploadDir);
   },
   filename: function (req, file, cb) {

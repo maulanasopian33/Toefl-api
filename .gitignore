@@ -41,3 +41,10 @@ logs/*.json
 # Abaikan file yang dihasilkan oleh sistem operasi
 .DS_Store
 Thumbs.db
+
+
+# Git internals (never deploy)
+.git
+
+# Production-only config (never overwrite)
+config/

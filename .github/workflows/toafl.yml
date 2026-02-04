@@ -18,9 +18,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Remove config files to prevent overwriting production
-        run: rm -f .env config/config.js config/cors.js
-
       - name: Upload code to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -28,11 +25,14 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          source: "./*"
+          source: |
+            *
+            !.git
+            !.env
+            !config
           target: "/var/www/html/api/toafl-api"
           overwrite: true
-          rm: false # Jangan hapus folder target sepenuhnya agar tidak downtime lama, rsync lebih baik tapi scp ok jika overwrite true
-          strip_components: 0
+          rm: false
 
       - name: Install dependencies and Restart PM2 on VPS
         uses: appleboy/ssh-action@v1.0.3

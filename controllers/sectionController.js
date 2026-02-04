@@ -5,6 +5,7 @@ exports.getAll = async (req, res) => {
   try {
     const sections = await section.findAll({
       include: [{ model: group, as: 'groups' }],
+      order: [['urutan', 'ASC']]
     });
     res.json(sections);
   } catch (err) {

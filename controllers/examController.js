@@ -53,10 +53,10 @@ exports.getExamData = async (req, res, next) => {
           as: 'audioInstructions',
           attributes: ['audioUrl'],
         },
-      ], // Add attributes from section model
-      attributes: ['idSection', 'namaSection', 'deskripsi'],
+      ],
+      attributes: ['idSection', 'namaSection', 'deskripsi', 'urutan'],
       order: [
-        ['idSection', 'ASC'],
+        ['urutan', 'ASC'],
         [{ model: db.group, as: 'groups' }, 'idGroup', 'ASC'],
         [{ model: db.group, as: 'groups' }, { model: db.question, as: 'questions' }, 'idQuestion', 'ASC'],
         [{ model: db.group, as: 'groups' }, { model: db.question, as: 'questions' }, { model: db.option, as: 'options' }, 'idOption', 'ASC'],
@@ -151,12 +151,15 @@ exports.updateExamData = async (req, res, next) => {
     const audioInstructionsToUpsert = [];
     const sectionAudioInstructionsToUpsert = [];
 
+    let sectionIndex = 0;
     for (const section of sectionsData) {
+      sectionIndex++;
       incomingSectionIds.push(section.id);
       sectionsToUpsert.push({
         idSection: section.id,
         namaSection: section.name,
         deskripsi: section.instructions,
+        urutan: sectionIndex, // Set urutan based on counter
         batchId,
       });
 
@@ -256,7 +259,7 @@ exports.updateExamData = async (req, res, next) => {
     // --- 3. Upsert (Update or Insert) data baru (Upsert phase) ---
     // Urutan: dari induk ke anak.
 
-    await db.section.bulkCreate(sectionsToUpsert, { updateOnDuplicate: ["namaSection", "deskripsi"], transaction });
+    await db.section.bulkCreate(sectionsToUpsert, { updateOnDuplicate: ["namaSection", "deskripsi", "urutan"], transaction });
     await db.group.bulkCreate(groupsToUpsert, { updateOnDuplicate: ["passage", "sectionId"], transaction });
 
     if (audioInstructionsToUpsert.length > 0) {
@@ -327,9 +330,9 @@ exports.getTestMetadata = async (req, res, next) => {
             });
         });
 
-        // Urutkan section berdasarkan ID (asumsi urutan)
+        // Urutkan section berdasarkan field urutan
         const sectionOrder = batch.sections
-            .sort((a, b) => a.idSection - b.idSection)
+            .sort((a, b) => (a.urutan || 0) - (b.urutan || 0))
             .map(s => ({ id: s.idSection, name: s.namaSection }));
 
         res.json({

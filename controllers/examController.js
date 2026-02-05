@@ -81,8 +81,8 @@ exports.getExamData = async (req, res, next) => {
             // 'id' for group is not in the example, but idGroup is useful for FE keys
             id: group.idGroup,
             passage: group.passage, // Frontend will receive HTML escaped
-            // Get audioUrl from the first audioInstruction if it exists
-            audioUrl: group.audioInstructions.length > 0 ? group.audioInstructions[0].audioUrl : null,
+            // Get all audioUrls from audioInstructions
+            audioUrls: group.audioInstructions.map(ai => ai.audioUrl),
             questions: group.questions.map(question => {
               // Find the correct option to get 'correctAnswer'
               const correctOption = question.options.find(opt => opt.isCorrect);
@@ -180,11 +180,15 @@ exports.updateExamData = async (req, res, next) => {
           batchId, // Denormalisasi untuk mempermudah penghapusan
         });
 
-        if (group.audioUrl) {
-          audioInstructionsToUpsert.push({
-            groupId: group.id,
-            audioUrl: group.audioUrl,
-            description: `Audio for group ${group.id}`,
+        if (group.audioUrls && Array.isArray(group.audioUrls)) {
+          group.audioUrls.forEach((url, index) => {
+            if (url) {
+              audioInstructionsToUpsert.push({
+                groupId: group.id,
+                audioUrl: url,
+                description: `Audio ${index + 1} for group ${group.id}`,
+              });
+            }
           });
         }
 
@@ -408,7 +412,7 @@ exports.getSectionData = async (req, res, next) => {
       groups: section.groups.map(group => ({
         id: group.idGroup,
         passage: group.passage,
-        audioUrl: group.audioInstructions.length > 0 ? group.audioInstructions[0].audioUrl : null,
+        audioUrls: group.audioInstructions.map(ai => ai.audioUrl),
         questions: group.questions.map(question => ({
           id: question.idQuestion,
           question: question.text,

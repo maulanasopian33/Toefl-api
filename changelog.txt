@@ -11,18 +11,16 @@ LATEST UPDATES - 06 Februari 2026
    - Frontend: [BARU] Menambahkan manajemen tabel scoring default dengan badge indikator dan tombol "Set as Default".
    - Frontend: [BARU] Menambahkan konfigurasi Scoring Type (SCALE/RAW) dan Initial Score pada halaman Add/Edit Batch.
    - Frontend: [BARU] Integrasi pemilihan tabel scoring spesifik per-section pada Exam Editor (Section Modal).
+   - Frontend: [BARU] Implementasi fitur perataan pilihan jawaban (Alignment LTR/RTL) yang dapat diatur per-pertanyaan untuk mendukung Bahasa Arab.
    - Penanganan Time-out: Penilaian tetap berjalan meskipun jawaban hanya sebagian (mendukung skenario user kehabisan waktu).
    - Clean Code: Menghapus helper conversion yang redundant di `examController.js`.
    - File yang disentuh: 
      - node-be/controllers/examController.js
-     - node-be/services/resultService.js
-     - node-be/services/scoringService.js
-     - node-be/models/scoringtable.js
-     - node-be/verify_scoring.js
-     - nuxt-fe/components/admin/scoring/TableForm.vue
-     - nuxt-fe/components/ExamEditor/SectionModal.vue
-     - nuxt-fe/pages/admin/batch/[...].vue
-     - nuxt-fe/pages/admin/settings/scoring-tables/[...].vue
+     - node-be/models/question.js
+     - node-be/migrations/[...]-add-options-alignment-to-questions.js
+     - nuxt-fe/composables/useExamEditor.ts
+     - nuxt-fe/components/ExamEditor/QuestionItem.vue
+     - nuxt-fe/components/Test/QuestionView.vue
 
 Timestamp: 2026-02-06 11:05:00
 

@@ -38,7 +38,7 @@ exports.getExamData = async (req, res, next) => {
                   attributes: ['idOption', 'text', 'isCorrect'],
                 },
               ], // Include type from question model
-              attributes: ['idQuestion', 'text', 'type', 'audioUrl'],
+              attributes: ['idQuestion', 'text', 'type', 'audioUrl', 'options_alignment'],
             },
             {
               model: db.groupaudioinstruction,
@@ -94,6 +94,7 @@ exports.getExamData = async (req, res, next) => {
                 audioUrl: question.audioUrl,
                 options: question.options.map(opt => opt.text),
                 correctAnswer: correctOption ? correctOption.text : null,
+                options_alignment: question.options_alignment || 'LTR',
                 userAnswer: null, // Add userAnswer as requested by FE structure
               };
             }),
@@ -202,6 +203,7 @@ exports.updateExamData = async (req, res, next) => {
             type: question.type,
             groupId: group.id,
             audioUrl: question.audioUrl,
+            options_alignment: question.options_alignment || 'LTR',
           });
 
           question.options.forEach((optionText, index) => {
@@ -276,7 +278,7 @@ exports.updateExamData = async (req, res, next) => {
       await db.sectionaudioinstruction.bulkCreate(sectionAudioInstructionsToUpsert, { transaction });
     }
 
-    await db.question.bulkCreate(questionsToUpsert, { updateOnDuplicate: ["text", "type", "audioUrl"], transaction });
+    await db.question.bulkCreate(questionsToUpsert, { updateOnDuplicate: ["text", "type", "audioUrl", "options_alignment"], transaction });
 
     if (optionsToUpsert.length > 0) {
       await db.option.bulkCreate(optionsToUpsert, { transaction });

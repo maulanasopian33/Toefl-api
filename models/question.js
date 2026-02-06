@@ -26,7 +26,11 @@ module.exports = (sequelize, DataTypes) => {
     type: DataTypes.STRING,
     groupId: DataTypes.STRING,
     sectionId: DataTypes.STRING,
-    audioUrl: DataTypes.STRING
+    audioUrl: DataTypes.STRING,
+    options_alignment: {
+      type: DataTypes.ENUM('LTR', 'RTL'),
+      defaultValue: 'LTR'
+    }
   }, {
     sequelize,
     modelName: 'question',

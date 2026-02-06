@@ -15,6 +15,7 @@ LATEST UPDATES - 06 Februari 2026
    - Frontend: [BARU] Kustomisasi Hero Title dan Hero Subtitle pada Dashboard User melalui pengaturan admin.
    - Frontend: [BARU] Manajemen Template Sertifikat dengan dukungan multi-format (.docx) dan variabel jigga {{nama}}.
    - Frontend: [BARU] Dashboard Laporan Keuangan dengan grafik trend, breakdown per-batch, dan per-metode pembayaran.
+   - Frontend: [BARU] Laporan Hasil Ujian & Analisis Soal (Distribusi Skor, Performa Section, Top 5 Soal Tersulit/Termudah).
    - Penanganan Time-out: Penilaian tetap berjalan meskipun jawaban hanya sebagian (mendukung skenario user kehabisan waktu).
    - Clean Code: Menghapus helper conversion yang redundant di `examController.js`.
    - File yang disentuh: 

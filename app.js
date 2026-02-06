@@ -29,6 +29,7 @@ const rolePermissionRoutes = require('./routes/rolePermissionRoutes');
 const scoringRoutes = require('./routes/scoringRoutes');
 const bankRoutes = require('./routes/bankRoutes');
 const certificateTemplateRoutes = require('./routes/certificateTemplateRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 
 
 const { httpLogger } = require('./utils/logger');
@@ -106,6 +107,7 @@ app.use('/rbac', rolePermissionRoutes);
 app.use('/scoring', scoringRoutes);
 app.use('/bank', bankRoutes);
 app.use('/certificate-templates', certificateTemplateRoutes);
+app.use('/reports', reportRoutes);
 // Middleware untuk menangani route yang tidak ditemukan (404 Not Found)
 app.use((req, res, next) => {
   const error = new Error('Not Found');

@@ -48,7 +48,9 @@ exports.updateSettings = async (req, res, next) => {
       'no_kontak',
       'bahasa_default',
       'zona_waktu',
-      'mata_uang'
+      'mata_uang',
+      'hero_title',
+      'hero_subtitle'
     ];
 
     // Filter req.body untuk hanya menyertakan kolom yang diizinkan

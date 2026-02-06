@@ -1,4 +1,4 @@
-const { batch, group, question, groupaudioinstruction: groupAudioInstruction, payment, user, sequelize } = require('../models');
+const { batch, group, question, groupaudioinstruction: groupAudioInstruction, payment, user, sequelize, batchparticipant, paymentproof } = require('../models');
 const { Op } = require('sequelize');
 
 exports.getStats = async (req, res) => {
@@ -66,38 +66,113 @@ exports.getFinancialRecap = async (req, res, next) => {
   try {
     const { startDate, endDate, batchId } = req.query;
 
-    // Build filter condition
     const whereCondition = {};
     if (startDate && endDate) {
       whereCondition.createdAt = {
         [Op.between]: [new Date(startDate), new Date(endDate)],
       };
     }
+
+    const participantWhere = {};
     if (batchId) {
-      // This requires a join, so we'll add it to the include
+      participantWhere.batchId = batchId;
     }
 
-    const recap = await payment.findAll({
+    // 1. Summary Information
+    const summary = await payment.findAll({
       attributes: [
-        [sequelize.fn('SUM', sequelize.col('amount')), 'totalAmount'],
         [sequelize.fn('SUM', sequelize.literal("CASE WHEN status = 'paid' THEN amount ELSE 0 END")), 'totalRevenue'],
         [sequelize.fn('SUM', sequelize.literal("CASE WHEN status = 'pending' THEN amount ELSE 0 END")), 'totalPending'],
-        [sequelize.fn('COUNT', sequelize.literal("CASE WHEN status = 'paid' THEN 1 ELSE NULL END")), 'paidTransactionsCount'],
-        [sequelize.fn('COUNT', sequelize.literal("CASE WHEN status = 'pending' THEN 1 ELSE NULL END")), 'pendingTransactionsCount'],
+        [sequelize.fn('SUM', sequelize.literal("CASE WHEN status = 'failed' OR status = 'refunded' THEN amount ELSE 0 END")), 'totalLoss'],
+        [sequelize.fn('COUNT', sequelize.literal("CASE WHEN status = 'paid' THEN 1 ELSE NULL END")), 'paidCount'],
+        [sequelize.fn('COUNT', sequelize.literal("CASE WHEN status = 'pending' THEN 1 ELSE NULL END")), 'pendingCount'],
       ],
       where: whereCondition,
-      // Include batch for filtering if batchId is provided
-      include: batchId ? [{
-        model: require('../models').batchparticipant,
-        as: 'participant',
-        attributes: [],
-        where: { batchId: batchId },
-        required: true
-      }] : [],
-      raw: true, // Get plain JSON object
+      include: [
+        {
+          model: batchparticipant,
+          as: 'participant',
+          attributes: [],
+          where: participantWhere,
+          required: Object.keys(participantWhere).length > 0
+        }
+      ],
+      raw: true,
     });
 
-    res.status(200).json({ status: true, message: 'Rekap keuangan berhasil diambil.', data: recap[0] });
+    // 2. Revenue Trend (Daily for the last 30 days or based on range)
+    const trend = await payment.findAll({
+      attributes: [
+        [sequelize.fn('DATE', sequelize.col('payment.createdAt')), 'date'],
+        [sequelize.fn('SUM', sequelize.col('amount')), 'amount'],
+      ],
+      where: { ...whereCondition, status: 'paid' },
+      include: [
+        {
+          model: batchparticipant,
+          as: 'participant',
+          attributes: [],
+          where: participantWhere,
+          required: Object.keys(participantWhere).length > 0
+        }
+      ],
+      group: [sequelize.fn('DATE', sequelize.col('payment.createdAt'))],
+      order: [[sequelize.fn('DATE', sequelize.col('payment.createdAt')), 'ASC']],
+      raw: true,
+    });
+
+    // 3. Batch Breakdown
+    const batchBreakdown = await payment.findAll({
+      attributes: [
+        [sequelize.col('participant.batch.namaBatch'), 'batchName'],
+        [sequelize.fn('SUM', sequelize.literal("CASE WHEN payment.status = 'paid' THEN amount ELSE 0 END")), 'revenue'],
+        [sequelize.fn('COUNT', sequelize.col('payment.id')), 'transactionCount'],
+      ],
+      where: whereCondition,
+      include: [
+        {
+          model: batchparticipant,
+          as: 'participant',
+          attributes: [],
+          required: true,
+          include: [{ model: batch, as: 'batch', attributes: [] }]
+        }
+      ],
+      group: [sequelize.col('participant.batch.id'), sequelize.col('participant.batch.namaBatch')],
+      raw: true,
+    });
+
+    // 4. Method Breakdown
+    const methodBreakdown = await payment.findAll({
+      attributes: [
+        'method',
+        [sequelize.fn('SUM', sequelize.literal("CASE WHEN status = 'paid' THEN amount ELSE 0 END")), 'revenue'],
+        [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
+      ],
+      where: whereCondition,
+      include: [
+        {
+          model: require('../models').batchparticipant,
+          as: 'participant',
+          attributes: [],
+          where: participantWhere,
+          required: Object.keys(participantWhere).length > 0
+        }
+      ],
+      group: ['method'],
+      raw: true,
+    });
+
+    res.status(200).json({
+      status: true,
+      message: 'Laporan keuangan berhasil diambil.',
+      data: {
+        summary: summary[0],
+        trend,
+        batchBreakdown,
+        methodBreakdown
+      }
+    });
   } catch (error) {
     next(error);
   }

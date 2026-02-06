@@ -54,7 +54,7 @@ exports.getExamData = async (req, res, next) => {
           attributes: ['audioUrl'],
         },
       ],
-      attributes: ['idSection', 'namaSection', 'deskripsi', 'urutan'],
+      attributes: ['idSection', 'namaSection', 'deskripsi', 'urutan', 'scoring_table_id'],
       order: [
         ['urutan', 'ASC'],
         [{ model: db.group, as: 'groups' }, 'idGroup', 'ASC'],
@@ -75,6 +75,7 @@ exports.getExamData = async (req, res, next) => {
         name: section.namaSection,
         type: section.namaSection, // Use namaSection for type as well
         instructions: section.deskripsi, // Frontend will receive HTML escaped
+        scoring_table_id: section.scoring_table_id,
         audioUrl: section.audioInstructions && section.audioInstructions.length > 0 ? section.audioInstructions[0].audioUrl : null,
         groups: section.groups.map(group => {
           return {
@@ -161,6 +162,7 @@ exports.updateExamData = async (req, res, next) => {
         deskripsi: section.instructions,
         urutan: sectionIndex, // Set urutan based on counter
         batchId,
+        scoring_table_id: section.scoring_table_id || null,
       });
 
       if (section.audioUrl) {
@@ -263,7 +265,7 @@ exports.updateExamData = async (req, res, next) => {
     // --- 3. Upsert (Update or Insert) data baru (Upsert phase) ---
     // Urutan: dari induk ke anak.
 
-    await db.section.bulkCreate(sectionsToUpsert, { updateOnDuplicate: ["namaSection", "deskripsi", "urutan"], transaction });
+    await db.section.bulkCreate(sectionsToUpsert, { updateOnDuplicate: ["namaSection", "deskripsi", "urutan", "scoring_table_id"], transaction });
     await db.group.bulkCreate(groupsToUpsert, { updateOnDuplicate: ["passage", "sectionId"], transaction });
 
     if (audioInstructionsToUpsert.length > 0) {
@@ -431,6 +433,11 @@ exports.getSectionData = async (req, res, next) => {
   }
 };
 
+const {
+  calculateUserResult,
+  getSectionScores
+} = require('../services/resultService');
+
 /**
  * [BARU] Menerima jawaban dari pengguna, menghitung skor, dan menyimpan hasil.
  * Route: POST /tests/:testId/submit
@@ -440,140 +447,64 @@ exports.submitTest = async (req, res, next) => {
   try {
     const { testId } = req.params;
     const { answers } = req.body;
-    const { uid } = req.user; // Ambil UID dari token Firebase
+    const { uid } = req.user; 
 
     if (!Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({ message: "Body request tidak valid. 'answers' harus berupa array." });
     }
 
-    // 1. Cari user di database lokal berdasarkan UID untuk mendapatkan ID primary key-nya.
+    // 1. Cari user
     const user = await db.user.findOne({ where: { uid }, attributes: ['uid'], transaction });
     if (!user) {
       return res.status(404).json({ message: "User tidak ditemukan di database." });
     }
-    const localUserId = user.uid; // Ini adalah ID integer dari tabel 'users'
+    const localUserId = user.uid;
 
-    // 2. Ambil semua ID pertanyaan dari jawaban pengguna
+    // 2. Ambil data pertanyaan untuk mendapatkan sectionId
     const questionIds = answers.map(a => a.questionId);
-
-    // 3. Ambil data pertanyaan dan kunci jawaban yang relevan dalam satu query
-    const questionsWithAnswers = await db.question.findAll({
-      where: {
-        idQuestion: { [Op.in]: questionIds }
-      },
-      attributes: ['idQuestion'],
-      include: [
-        {
-          model: db.option,
-          as: 'options',
-          where: { isCorrect: true },
-          attributes: ['idOption'],
-          required: false // Gunakan left join jika ada pertanyaan tanpa kunci jawaban
-        },
-        {
-          model: db.group,
-          as: 'group',
-          attributes: ['sectionId'] // Ambil sectionId dari group terkait
-        }
-      ],
+    const questionsInfo = await db.question.findAll({
+      where: { idQuestion: { [Op.in]: questionIds } },
+      include: [{ model: db.group, as: 'group', attributes: ['sectionId'] }],
       transaction,
     });
 
-    // 4. Buat map untuk pencarian cepat: { questionId: { correctOptionId, sectionId } }
-    const answerKey = new Map(questionsWithAnswers.map(q => [
-      q.idQuestion,
-      {
-        correctOptionId: q.options[0]?.idOption, // Ambil idOption dari opsi yang benar
-        sectionId: q.group?.sectionId // Ambil sectionId dari relasi group
-      }
-    ]));
+    const questionMap = new Map(questionsInfo.map(q => [q.idQuestion, q.group?.sectionId]));
 
-    // 5. Hitung skor dan siapkan data jawaban untuk disimpan
-    let correctCount = 0;
-    const userAnswersToSave = answers.map(answer => {
-      const questionInfo = answerKey.get(answer.questionId);
-      if (questionInfo && questionInfo.correctOptionId === answer.userAnswer) {
-        correctCount++;
-      }
-      return {
-        userId: localUserId, // Gunakan ID lokal (integer)
-        batchId: testId,
-        sectionId: questionInfo ? questionInfo.sectionId : null, // Tambahkan sectionId
-        questionId: answer.questionId,
-        optionId: answer.userAnswer,
-      };
+    // 3. Simpan jawaban ke tabel useranswer
+    // Hapus jawaban lama untuk batch ini jika ada (mencegah duplikasi pengerjaan yang tidak rapi)
+    await db.useranswer.destroy({
+      where: { userId: localUserId, batchId: testId },
+      transaction
     });
-    
-    const totalQuestions = answers.length;
-    const wrongCount = totalQuestions - correctCount;
 
-    // Placeholder untuk logika skor TOEFL yang lebih kompleks jika diperlukan
-    const finalScore = correctCount; // Saat ini skor = jumlah benar
-
-    // 7. Simpan hasil akhir ke tabel userResult
-    const createdResult = await db.userresult.create({
-      userId: localUserId, // Gunakan ID lokal (integer)
+    const userAnswersToSave = answers.map(answer => ({
+      userId: localUserId,
       batchId: testId,
-      totalQuestions: totalQuestions,
-      correctCount: correctCount,
-      wrongCount: wrongCount,
-      score: finalScore,
-      submittedAt: new Date(),
-    }, { transaction });
-
-    // 8. Tambahkan userResultId ke setiap jawaban dan simpan
-    const answersWithResultId = userAnswersToSave.map(answer => ({
-      ...answer,
-      userResultId: createdResult.id,
+      sectionId: questionMap.get(answer.questionId) || null,
+      questionId: answer.questionId,
+      optionId: answer.userAnswer,
     }));
-    await db.useranswer.bulkCreate(answersWithResultId, { transaction });
+
+    await db.useranswer.bulkCreate(userAnswersToSave, { transaction });
 
     await transaction.commit();
 
+    // 4. Hitung skor menggunakan ResultService (Logical Centrally)
+    const result = await calculateUserResult(localUserId, testId);
+
     res.status(201).json({
-      score: finalScore,
-      totalQuestions: totalQuestions,
-      correctCount: correctCount,
-      wrongCount: wrongCount,
+      score: result.score,
+      totalQuestions: result.totalQuestions,
+      correctCount: result.correctCount,
+      wrongCount: result.totalQuestions - result.correctCount,
     });
   } catch (error) {
-    await transaction.rollback();
+    if (transaction) await transaction.rollback();
     next(error);
   }
 };
 
-/**
- * Tabel konversi skor TOEFL ITP.
- * @param {number} correctCount - Jumlah jawaban benar.
- * @param {string} conversionType - Tipe section ('listening', 'structure', 'reading').
- * @returns {number} Skor yang telah dikonversi.
- */
-const convertScore = (correctCount, conversionType) => {
-  const scoresForCount = {
-    listening: [24, 25, 26, 27, 29, 30, 31, 32, 32, 33, 35, 37, 37, 38, 41, 41, 42, 43, 44, 45, 45, 46, 47, 48, 49, 49, 50, 51, 52, 53, 54, 54, 55, 56, 57, 57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 67, 68],
-    structure: [20, 20, 21, 22, 23, 25, 26, 27, 29, 31, 33, 35, 36, 37, 38, 40, 40, 41, 42, 43, 44, 45, 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 60, 61, 63, 65, 67, 68],
-    reading: [21, 22, 23, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 43, 44, 45, 46, 46, 47, 48, 49, 50, 51, 52, 52, 53, 54, 54, 55, 56, 57, 58, 59, 60, 61, 63, 65, 66, 67],
-  };
-  // Jika jumlah benar di luar rentang, kembalikan skor min/max
-  if (correctCount <= 0) return scoresForCount[conversionType][0] || 20;
-  if (correctCount >= scoresForCount[conversionType].length) return scoresForCount[conversionType][scoresForCount[conversionType].length - 1] || 68;
 
-  return scoresForCount[conversionType][correctCount - 1] || 20;
-};
-
-/**
- * Menentukan tipe konversi skor berdasarkan nama section.
- * @param {string} sectionName - Nama section, contoh: "Listening Comprehension".
- * @returns {string} Tipe konversi ('listening', 'structure', 'reading').
- */
-const getConversionTypeFromName = (sectionName) => {
-  const lowerCaseName = sectionName.toLowerCase();
-  if (lowerCaseName.includes('listening')) return 'listening';
-  if (lowerCaseName.includes('structure')) return 'structure';
-  if (lowerCaseName.includes('reading')) return 'reading';
-  // Fallback default jika tidak ada yang cocok
-  return 'structure';
-};
 
 /**
  * [BARU] Mengambil riwayat hasil tes untuk seorang peserta.
@@ -582,92 +513,67 @@ const getConversionTypeFromName = (sectionName) => {
 exports.getTestResult = async (req, res, next) => {
   try {
     const { historyId: rawHistoryId } = req.params;
-    const { uid } = req.user; // Ambil UID dari token Firebase
+    const { uid } = req.user; 
 
-    // Ekstrak ID numerik dari string format 'tes_history_123'
+    // Ekstrak ID numerik
     const historyId = rawHistoryId.split('_').pop();
 
     // 1. Ambil hasil tes utama
     const userResult = await db.userresult.findOne({
       where: { id: historyId, userId: uid },
-      include: [{ model: db.batch, as: 'batch', attributes: ['name'] }],
+      include: [{ model: db.batch, as: 'batch', attributes: ['name', 'scoring_type', 'scoring_config'] }],
     });
 
     if (!userResult) {
       return res.status(404).json({ message: 'Riwayat tes tidak ditemukan.' });
     }
 
-    // 2. Ambil semua jawaban pengguna untuk tes ini
+    // 2. Ambil detail skor per section menggunakan Service
+    const sectionScoresMap = await getSectionScores(
+      uid,
+      userResult.batchId,
+      userResult.batch.scoring_type,
+      userResult.batch.scoring_config
+    );
+
+    const sectionsForResponse = Object.entries(sectionScoresMap).map(([name, score]) => ({
+      name,
+      score
+    }));
+
+    // 3. Ambil detail jawaban untuk tampilan review
     const userAnswers = await db.useranswer.findAll({
       where: { userId: uid, batchId: userResult.batchId },
-      attributes: ['optionId'],
       include: [
         {
           model: db.question, as: 'question', attributes: ['idQuestion', 'text'],
           include: [
-            { model: db.option, as: 'options', where: { isCorrect: true }, attributes: ['idOption'], required: false },
-            { model: db.group, as: 'group', attributes: ['sectionId'], include: [{ model: db.section, as: 'section', attributes: ['idSection', 'namaSection'] }] }
+            { model: db.option, as: 'options', attributes: ['idOption', 'text', 'isCorrect'] },
+            { model: db.group, as: 'group', include: [{ model: db.section, as: 'section', attributes: ['namaSection'] }] }
           ]
         }
       ]
     });
 
-    // 3. Hitung skor per section
-    const sectionScores = {};
-    userAnswers.forEach(answer => {
-      const section = answer.question?.group?.section;
-      if (!section) return;
-
-      if (!sectionScores[section.idSection]) {
-        const conversionType = getConversionTypeFromName(section.namaSection);
-        sectionScores[section.idSection] = { name: section.namaSection, conversionType: conversionType, correct: 0, total: 0 };
-      }
-
-      const isCorrect = answer.question?.options[0]?.idOption === answer.optionId;
-      if (isCorrect) {
-        sectionScores[section.idSection].correct++;
-      }
-      sectionScores[section.idSection].total++;
-    });
-
-    // 4. Konversi ke skor skala dan format output
-    let totalScaledScore = 0;
-    const sectionsForResponse = Object.entries(sectionScores).map(([id, secData]) => {
-      const rawScore = secData.correct;
-      // Konversi skor mentah ke skor skala
-      const scaledScore = convertScore(rawScore, secData.conversionType);
-      totalScaledScore += scaledScore;
-      return {
-        name: secData.name,
-        score: scaledScore,
-      };
-    });
-
-    // 5. Hitung skor akhir TOEFL
-    // Rata-rata dari 3 section, dikalikan 10
-    const finalScore = Math.round((totalScaledScore / 3) * 10);
-
-    // 6. Format jawaban pengguna untuk ditampilkan di frontend
     const detailedAnswers = userAnswers.map(answer => {
       const question = answer.question;
-      const section = question?.group?.section;
-      const isCorrect = question?.options[0]?.idOption === answer.optionId;
-
+      const correctOption = question?.options.find(o => o.isCorrect);
+      
       return {
-        questionId: question.idQuestion,
-        questionText: question.text,
+        questionId: question?.idQuestion,
+        questionText: question?.text,
         userAnswerId: answer.optionId,
-        correctAnswerId: question?.options[0]?.idOption,
-        isCorrect: isCorrect,
-        sectionName: section ? section.namaSection : 'Unknown',
+        correctAnswerId: correctOption?.idOption,
+        isCorrect: answer.optionId === correctOption?.idOption,
+        sectionName: question?.group?.section?.namaSection || 'Unknown',
       };
     });
 
-    // 7. Kirim respons lengkap
+    // 4. Kirim respons
     res.status(200).json({
       testName: userResult.batch.name,
       submittedAt: userResult.submittedAt,
-      finalScore: finalScore,
+      finalScore: userResult.score,
       summary: {
         totalQuestions: userResult.totalQuestions,
         correctCount: userResult.correctCount,

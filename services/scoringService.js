@@ -42,9 +42,13 @@ class ScoringService {
   static async createTable(data) {
     const transaction = await sequelize.transaction();
     try {
-      const { name, description, details } = data;
+      const { name, description, details, is_default } = data;
       
-      const table = await scoringtable.create({ name, description }, { transaction });
+      if (is_default) {
+        await scoringtable.update({ is_default: false }, { where: { is_default: true }, transaction });
+      }
+
+      const table = await scoringtable.create({ name, description, is_default: !!is_default }, { transaction });
 
       if (details && Array.isArray(details)) {
         const detailsToCreate = details.map(detail => ({
@@ -69,15 +73,17 @@ class ScoringService {
   static async updateTable(id, data) {
     const transaction = await sequelize.transaction();
     try {
-      const { name, description, details } = data;
+      const { name, description, details, is_default } = data;
       const table = await scoringtable.findByPk(id);
       if (!table) throw new Error('Scoring table not found');
 
-      await table.update({ name, description }, { transaction });
+      if (is_default && !table.is_default) {
+        await scoringtable.update({ is_default: false }, { where: { is_default: true }, transaction });
+      }
+
+      await table.update({ name, description, is_default: is_default !== undefined ? !!is_default : table.is_default }, { transaction });
 
       if (details && Array.isArray(details)) {
-        // Simple strategy: Clear and recreate details for consistency
-        // Alternatif: Logic for partial update (diffing) for better performance if details are large
         await scoringdetail.destroy({
           where: { scoring_table_id: id },
           transaction

@@ -6,55 +6,11 @@ const {
   batch,
   section,
   group,
-  scoringdetail
+  scoringdetail,
+  scoringtable
 } = require('../models');
 const { logger } = require('../utils/logger');
-
-/**
- * Fallback tabel konversi TOEFL ITP standar.
- * Digunakan jika tidak ada tabel konversi yang didefinisikan di database.
- */
-const DEFAULT_CONVERSION_TABLES = {
-  listening: [24, 25, 26, 27, 29, 30, 31, 32, 32, 33, 35, 37, 37, 38, 41, 41, 42, 43, 44, 45, 45, 46, 47, 48, 49, 49, 50, 51, 52, 53, 54, 54, 55, 56, 57, 57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 67, 68],
-  structure: [20, 20, 21, 22, 23, 25, 26, 27, 29, 31, 33, 35, 36, 37, 38, 40, 40, 41, 42, 43, 44, 45, 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 60, 61, 63, 65, 67, 68],
-  reading: [21, 22, 23, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 43, 44, 45, 46, 46, 47, 48, 49, 50, 51, 52, 52, 53, 54, 54, 55, 56, 57, 58, 59, 60, 61, 63, 65, 66, 67],
-};
-
-/**
- * Mencari skor konversi dari database berdasarkan idSection atau fallback ke default.
- * 
- * @param {number} correctCount - Jumlah jawaban benar.
- * @param {string} sectionId - ID Section untuk lookup di scoring_details.
- * @param {number|null} scoringTableId - ID Tabel Scoring (opsional).
- * @param {string} fallbackType - Tipe fallback jika DB tidak ketemu (listening/structure/reading).
- * @returns {Promise<number>} - Nilai hasil konversi.
- */
-const getConvertedScore = async (correctCount, sectionId, scoringTableId = null, fallbackType = 'structure') => {
-  try {
-    if (scoringTableId) {
-      const detail = await scoringdetail.findOne({
-        where: {
-          scoring_table_id: scoringTableId,
-          section_category: sectionId,
-          correct_count: correctCount
-        }
-      });
-
-      if (detail) return detail.converted_score;
-    }
-
-    // Fallback ke tabel hardcoded jika data di DB tidak ada
-    const table = DEFAULT_CONVERSION_TABLES[fallbackType] || DEFAULT_CONVERSION_TABLES['structure'];
-
-    // Safety check untuk index array
-    if (correctCount <= 0) return table[0] || 20;
-    if (correctCount >= table.length) return table[table.length - 1] || 68;
-    return table[correctCount - 1] || 20;
-  } catch (err) {
-    logger.error(`Error in getConvertedScore: ${err.message}`, { sectionId, correctCount });
-    return 20; // Default safety score
-  }
-};
+const { Op } = require('sequelize');
 
 /**
  * Mendapatkan kategori fallback (listening/structure/reading) berdasarkan nama section.
@@ -68,6 +24,79 @@ const getFallbackCategory = (sectionName) => {
 };
 
 /**
+ * Mencari skor konversi dari database.
+ * Jika scoringTableId tidak ada, cari tabel default.
+ * 
+ * @param {Array} details - Array of scoring details (bulk fetched).
+ * @param {number} correctCount - Jumlah jawaban benar.
+ * @param {string|null} sectionId - ID Section.
+ * @param {string} fallbackCategory - Kategori (listening/structure/reading).
+ * @returns {number} - Nilai hasil konversi.
+ */
+const findScoreInDetails = (details, correctCount, sectionId, fallbackCategory) => {
+  // 1. Cari yang match sectionId dan correctCount
+  let match = details.find(d => d.section_category === sectionId && d.correct_count === correctCount);
+  if (match) return match.converted_score;
+
+  // 2. Cari yang match fallbackCategory (misal 'listening') dan correctCount
+  match = details.find(d => d.section_category === fallbackCategory && d.correct_count === correctCount);
+  if (match) return match.converted_score;
+
+  // 3. Last fallback (safety score)
+  return 20; 
+};
+
+/**
+ * Mengambil data statistik jawaban (correct/total) per section untuk user.
+ * @private
+ */
+async function _getInternalSectionStats(userId, batchId) {
+  const answers = await useranswer.findAll({
+    where: { userId, batchId },
+    include: [
+      { model: option, as: 'option', attributes: ['isCorrect'] },
+      {
+        model: question, as: 'question',
+        include: [{
+          model: group, as: 'group',
+          include: [{
+            model: section, as: 'section',
+            attributes: ['idSection', 'namaSection', 'scoring_table_id']
+          }]
+        }]
+      }
+    ]
+  });
+
+  const sectionMap = {};
+  answers.forEach(ans => {
+    const sect = ans.question?.group?.section;
+    if (!sect) return;
+
+    if (!sectionMap[sect.idSection]) {
+      sectionMap[sect.idSection] = {
+        id: sect.idSection,
+        name: sect.namaSection,
+        correct: 0,
+        total: 0,
+        tableId: sect.scoring_table_id,
+        fallback: getFallbackCategory(sect.namaSection)
+      };
+    }
+    sectionMap[sect.idSection].total++;
+    if (ans.option?.isCorrect) {
+      sectionMap[sect.idSection].correct++;
+    }
+  });
+
+  return {
+    sectionMap,
+    totalAnswers: answers.length,
+    totalCorrect: Object.values(sectionMap).reduce((sum, s) => sum + s.correct, 0)
+  };
+}
+
+/**
  * Menghitung skor akhir user untuk satu batch ujian.
  */
 async function calculateUserResult(userId, batchId) {
@@ -79,65 +108,41 @@ async function calculateUserResult(userId, batchId) {
     const multiplier = config.multiplier || 10;
     const divisor = config.divisor || 3;
 
-    // Ambil jawaban beserta info section (scoring_table_id)
-    const answers = await useranswer.findAll({
-      where: { userId, batchId },
-      include: [
-        { model: option, as: 'option', attributes: ['isCorrect'] },
-        {
-          model: question, as: 'question',
-          include: [{
-            model: group, as: 'group',
-            include: [{
-              model: section, as: 'section',
-              attributes: ['idSection', 'namaSection', 'scoring_table_id']
-            }]
-          }]
-        }
-      ]
-    });
-
-    if (answers.length === 0) {
-      logger.warn(`User ${userId} tidak memiliki jawaban di batch ${batchId}`);
-      // Tetap lanjutkan untuk reset score jika sebelumnya ada
-    }
-
-    let totalCorrect = 0;
-    const sectionDataMap = {};
-
-    answers.forEach(ans => {
-      const isCorrect = ans.option?.isCorrect || false;
-      const sect = ans.question?.group?.section;
-
-      if (sect) {
-        if (!sectionDataMap[sect.idSection]) {
-          sectionDataMap[sect.idSection] = {
-            id: sect.idSection,
-            correct: 0,
-            name: sect.namaSection,
-            tableId: sect.scoring_table_id,
-            fallback: getFallbackCategory(sect.namaSection)
-          };
-        }
-        if (isCorrect) {
-          sectionDataMap[sect.idSection].correct++;
-          totalCorrect++;
-        }
-      } else if (isCorrect) {
-        totalCorrect++;
-      }
-    });
+    // 1. Ambil statistik pengerjaan
+    const stats = await _getInternalSectionStats(userId, batchId);
+    const { sectionMap, totalCorrect, totalAnswers } = stats;
 
     let finalScore = 0;
+
     if (batchInfo.scoring_type === 'RAW') {
       finalScore = (config.initialScore || 0) + totalCorrect;
     } else {
+      // 2. Optimization: Bulk Fetch Scoring Details
+      const tableIds = Object.values(sectionMap)
+        .map(s => s.tableId)
+        .filter(id => id !== null);
+      
+      // Cari ID tabel default jika ada section tanpa tableId
+      if (tableIds.length < Object.keys(sectionMap).length) {
+        const defaultTable = await scoringtable.findOne({ where: { is_default: true }, attributes: ['id'] });
+        if (defaultTable) tableIds.push(defaultTable.id);
+      }
+
+      let allDetails = [];
+      if (tableIds.length > 0) {
+        allDetails = await scoringdetail.findAll({
+          where: { scoring_table_id: { [Op.in]: [...new Set(tableIds)] } },
+          attributes: ['scoring_table_id', 'section_category', 'correct_count', 'converted_score']
+        });
+      }
+
+      // 3. Hitung skor per section
       let totalConverted = 0;
       let usedSectionCount = 0;
 
-      for (const sectionId in sectionDataMap) {
-        const data = sectionDataMap[sectionId];
-        const converted = await getConvertedScore(data.correct, data.id, data.tableId, data.fallback);
+      for (const sectionId in sectionMap) {
+        const data = sectionMap[sectionId];
+        const converted = findScoreInDetails(allDetails, data.correct, data.id, data.fallback);
         totalConverted += converted;
         usedSectionCount++;
       }
@@ -145,18 +150,17 @@ async function calculateUserResult(userId, batchId) {
       if (usedSectionCount > 0) {
         finalScore = Math.round((totalConverted * multiplier) / divisor);
       } else {
-        finalScore = answers.length > 0 ? Math.round((totalCorrect / answers.length) * 677) : 0;
+        finalScore = totalAnswers > 0 ? Math.round((totalCorrect / totalAnswers) * 677) : 0;
       }
     }
 
-    // Upsert hasil
-    const totalQuestions = answers.length;
+    // 4. Upsert hasil
     const [userRes, created] = await userresult.findOrCreate({
       where: { userId, batchId },
       defaults: {
-        userId, batchId, totalQuestions,
+        userId, batchId, totalQuestions: totalAnswers,
         correctCount: totalCorrect,
-        wrongCount: totalQuestions - totalCorrect,
+        wrongCount: totalAnswers - totalCorrect,
         score: finalScore,
         submittedAt: new Date()
       }
@@ -164,16 +168,16 @@ async function calculateUserResult(userId, batchId) {
 
     if (!created) {
       await userRes.update({
-        totalQuestions,
+        totalQuestions: totalAnswers,
         correctCount: totalCorrect,
-        wrongCount: totalQuestions - totalCorrect,
+        wrongCount: totalAnswers - totalCorrect,
         score: finalScore,
         submittedAt: new Date()
       });
     }
 
     logger.info(`Result calculated: User ${userId}, Batch ${batchId}, Score ${finalScore}`);
-    return { userId, batchId, totalQuestions, correctCount: totalCorrect, score: finalScore };
+    return { userId, batchId, totalQuestions: totalAnswers, correctCount: totalCorrect, score: finalScore };
   } catch (err) {
     logger.error(`calculateUserResult Error: ${err.message}`, { userId, batchId });
     throw err;
@@ -185,46 +189,32 @@ async function calculateUserResult(userId, batchId) {
  */
 async function getSectionScores(userId, batchId, scoringType, scoringConfig = {}) {
   try {
-    const answers = await useranswer.findAll({
-      where: { userId, batchId },
-      include: [
-        { model: option, as: 'option', attributes: ['isCorrect'] },
-        {
-          model: question, as: 'question',
-          include: [{
-            model: group, as: 'group',
-            include: [{ model: section, as: 'section' }]
-          }]
-        }
-      ]
-    });
+    const stats = await _getInternalSectionStats(userId, batchId);
+    const { sectionMap } = stats;
 
-    const sections = {};
-    answers.forEach(ans => {
-      const sect = ans.question?.group?.section;
-      if (!sect) return;
+    // Bulk Fetch (sama seperti calculateUserResult)
+    const tableIds = Object.values(sectionMap)
+      .map(s => s.tableId)
+      .filter(id => id !== null);
 
-      if (!sections[sect.idSection]) {
-        sections[sect.idSection] = {
-          id: sect.idSection,
-          name: sect.namaSection,
-          correct: 0,
-          tableId: sect.scoring_table_id,
-          fallback: getFallbackCategory(sect.namaSection)
-        };
-      }
-      if (ans.option?.isCorrect) {
-        sections[sect.idSection].correct++;
-      }
-    });
+    const defaultTable = await scoringtable.findOne({ where: { is_default: true }, attributes: ['id'] });
+    if (defaultTable) tableIds.push(defaultTable.id);
+
+    let allDetails = [];
+    if (tableIds.length > 0) {
+      allDetails = await scoringdetail.findAll({
+        where: { scoring_table_id: { [Op.in]: [...new Set(tableIds)] } },
+        attributes: ['scoring_table_id', 'section_category', 'correct_count', 'converted_score']
+      });
+    }
 
     const result = {};
-    for (const sid in sections) {
-      const data = sections[sid];
+    for (const sid in sectionMap) {
+      const data = sectionMap[sid];
       if (scoringType === 'RAW') {
         result[data.name] = data.correct;
       } else {
-        result[data.name] = await getConvertedScore(data.correct, data.id, data.tableId, data.fallback);
+        result[data.name] = findScoreInDetails(allDetails, data.correct, data.id, data.fallback);
       }
     }
     return result;
@@ -236,6 +226,5 @@ async function getSectionScores(userId, batchId, scoringType, scoringConfig = {}
 
 module.exports = {
   calculateUserResult,
-  getConvertedScore,
   getSectionScores
 };

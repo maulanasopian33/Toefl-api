@@ -5,7 +5,7 @@ const path = require('path');
 const downloadImage = async (url, uid) => {
   try {
     if (!url) {
-      console.log('URL gambar kosong.'); // Tambahkan log ini
+      // Empty image URL
       return null;
     }
 

@@ -6,9 +6,13 @@ const {
   batch, 
   section, 
   group, 
+  payment,
+  user,
+  batchparticipant,
   sequelize 
 } = require('../models');
 const { Op } = require('sequelize');
+const { jsonToCsv } = require('../utils/csvGenerator');
 
 exports.getExamReport = async (req, res, next) => {
   try {
@@ -119,6 +123,202 @@ exports.getExamReport = async (req, res, next) => {
         }
       }
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getParticipantReport = async (req, res, next) => {
+  try {
+    const { batchId, search, page = 1, limit = 10 } = req.query;
+    const offset = (page - 1) * limit;
+
+    const whereClause = {};
+    if (batchId) {
+      whereClause.batchId = batchId;
+    }
+
+    // Search by user name or email
+    const userWhereClause = {};
+    if (search) {
+      userWhereClause[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    const { count, rows } = await userresult.findAndCountAll({
+      where: whereClause,
+      include: [
+        { 
+          model: sequelize.models.user, 
+          as: 'user', 
+          attributes: ['id', 'name', 'email'],
+          where: userWhereClause,
+          required: true 
+        },
+        {
+          model: batch,
+          as: 'batch',
+          attributes: ['idBatch', 'name']
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      distinct: true // Important for correct count with includes
+    });
+
+    res.status(200).json({
+      status: true,
+      data: {
+        totalItems: count,
+        totalPages: Math.ceil(count / limit),
+        currentPage: parseInt(page),
+        participants: rows
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.exportExamReportCSV = async (req, res, next) => {
+  try {
+    const { batchId } = req.query;
+    const questionPerformance = await useranswer.findAll({
+      where: batchId ? { batchId } : {},
+      attributes: [
+        [sequelize.col('question.idQuestion'), 'id'],
+        [sequelize.col('question.text'), 'text'],
+        [
+          sequelize.fn('AVG', sequelize.literal("CASE WHEN option.isCorrect = 1 THEN 100 ELSE 0 END")), 
+          'correctPercentage'
+        ],
+        [sequelize.fn('COUNT', sequelize.col('useranswer.id')), 'totalAttempts']
+      ],
+      include: [
+        { model: option, as: 'option', attributes: [], required: true },
+        { model: question, as: 'question', attributes: [], required: true }
+      ],
+      group: [sequelize.col('question.idQuestion'), sequelize.col('question.text')],
+      raw: true
+    });
+
+    const csvData = questionPerformance.map(q => ({
+      ID: q.id,
+      Question: q.text.replace(/<\/?[^>]+(>|$)/g, ""),
+      'Correct Percentage (%)': Math.round(q.correctPercentage),
+      'Total Attempts': q.totalAttempts
+    }));
+
+    const csv = jsonToCsv(csvData);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=exam-report-${batchId || 'all'}.csv`);
+    res.status(200).send(csv);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.exportParticipantReportCSV = async (req, res, next) => {
+  try {
+    const { batchId, search } = req.query;
+    const whereClause = {};
+    if (batchId) whereClause.batchId = batchId;
+
+    const userWhereClause = {};
+    if (search) {
+      userWhereClause[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    const participants = await userresult.findAll({
+      where: whereClause,
+      include: [
+        { 
+          model: user, 
+          as: 'user', 
+          attributes: ['name', 'email'],
+          where: userWhereClause,
+          required: true 
+        },
+        {
+          model: batch,
+          as: 'batch',
+          attributes: ['name']
+        }
+      ],
+      order: [['score', 'DESC']],
+      raw: true
+    });
+
+    const csvData = participants.map(p => ({
+      Name: p['user.name'],
+      Email: p['user.email'],
+      Batch: p['batch.name'],
+      Score: p.score,
+      Date: p.createdAt
+    }));
+
+    const csv = jsonToCsv(csvData);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=participant-report-${batchId || 'all'}.csv`);
+    res.status(200).send(csv);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.exportFinancialReportCSV = async (req, res, next) => {
+  try {
+    const { startDate, endDate, batchId } = req.query;
+    const whereCondition = {};
+    if (startDate && endDate) {
+      whereCondition.createdAt = {
+        [Op.between]: [new Date(startDate), new Date(endDate)],
+      };
+    }
+
+    const participantWhere = {};
+    if (batchId) participantWhere.batchId = batchId;
+
+    const payments = await payment.findAll({
+      where: whereCondition,
+      include: [
+        {
+          model: batchparticipant,
+          as: 'participant',
+          where: participantWhere,
+          required: true,
+          include: [
+            { model: user, as: 'user', attributes: ['name', 'email'] },
+            { model: batch, as: 'batch', attributes: ['name'] }
+          ]
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+      raw: true
+    });
+
+    const csvData = payments.map(p => ({
+      Invoice: p.invoiceNumber,
+      Name: p['participant.user.name'],
+      Email: p['participant.user.email'],
+      Batch: p['participant.batch.name'],
+      Amount: p.amount,
+      Status: p.status,
+      Method: p.method,
+      Date: p.createdAt
+    }));
+
+    const csv = jsonToCsv(csvData);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=financial-report-${startDate || 'start'}-to-${endDate || 'end'}.csv`);
+    res.status(200).send(csv);
   } catch (error) {
     next(error);
   }

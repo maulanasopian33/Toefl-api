@@ -30,6 +30,7 @@ const scoringRoutes = require('./routes/scoringRoutes');
 const bankRoutes = require('./routes/bankRoutes');
 const certificateTemplateRoutes = require('./routes/certificateTemplateRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const logRoutes = require('./routes/logRoutes');
 
 
 const { httpLogger } = require('./utils/logger');
@@ -40,6 +41,8 @@ const app = express();
 const cors = require('cors');
 const corsOptions = require('./config/cors');
 const errorHandler = require('./middlewares/errorHandler');
+const auditMiddleware = require('./middlewares/auditMiddleware');
+const checkAuth = require('./middlewares/authMiddleware');
 
 
 // view engine setup
@@ -56,14 +59,14 @@ app.use(helmet({
 
 // Rate Limiting
 const rateLimit = require('express-rate-limit');
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000, // 15 minutes
-//   max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
-//   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-//   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-//   message: { status: false, message: 'Terlalu banyak permintaan, silakan coba lagi nanti.' }
-// });
-// app.use(limiter);
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300, // Increased to 300 to accommodate multiple assets/reloads
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: false, message: 'Terlalu banyak permintaan, silakan coba lagi nanti.' }
+});
+app.use(limiter);
 
 // Specific limiter for login to prevent brute force
 const loginLimiter = rateLimit({
@@ -79,6 +82,7 @@ app.use(morgan('combined', { stream: httpLogger.stream }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ limit: '2mb', extended: false }));
 app.use(cookieParser());
+app.use(auditMiddleware);
 const storageUtil = require('./utils/storage');
 app.use(express.static(storageUtil.getStorageDir()));
 
@@ -108,6 +112,7 @@ app.use('/scoring', scoringRoutes);
 app.use('/bank', bankRoutes);
 app.use('/certificate-templates', certificateTemplateRoutes);
 app.use('/reports', reportRoutes);
+app.use('/logs', logRoutes);
 // Middleware untuk menangani route yang tidak ditemukan (404 Not Found)
 app.use((req, res, next) => {
   const error = new Error('Not Found');

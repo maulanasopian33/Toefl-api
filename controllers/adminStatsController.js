@@ -124,7 +124,7 @@ exports.getFinancialRecap = async (req, res, next) => {
     // 3. Batch Breakdown
     const batchBreakdown = await payment.findAll({
       attributes: [
-        [sequelize.col('participant.batch.namaBatch'), 'batchName'],
+        [sequelize.col('participant.batch.name'), 'batchName'],
         [sequelize.fn('SUM', sequelize.literal("CASE WHEN payment.status = 'paid' THEN amount ELSE 0 END")), 'revenue'],
         [sequelize.fn('COUNT', sequelize.col('payment.id')), 'transactionCount'],
       ],
@@ -138,7 +138,7 @@ exports.getFinancialRecap = async (req, res, next) => {
           include: [{ model: batch, as: 'batch', attributes: [] }]
         }
       ],
-      group: [sequelize.col('participant.batch.id'), sequelize.col('participant.batch.namaBatch')],
+      group: [sequelize.col('participant.batch.idBatch'), sequelize.col('participant.batch.name')], // Changed to idBatch and name
       raw: true,
     });
 
@@ -147,7 +147,7 @@ exports.getFinancialRecap = async (req, res, next) => {
       attributes: [
         'method',
         [sequelize.fn('SUM', sequelize.literal("CASE WHEN status = 'paid' THEN amount ELSE 0 END")), 'revenue'],
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
+        [sequelize.fn('COUNT', sequelize.col('payment.id')), 'count'],
       ],
       where: whereCondition,
       include: [

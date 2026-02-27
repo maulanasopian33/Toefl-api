@@ -12,7 +12,7 @@ const storage = {
     const dir = process.env.CDN_STORAGE_DIR || path.join(__dirname, '../public');
     // Tambahkan log untuk debug di production
     if (process.env.NODE_ENV === 'production') {
-      console.log(`[Storage] Selected dir: ${dir} (process.env.CDN_STORAGE_DIR: ${process.env.CDN_STORAGE_DIR})`);
+      // Log storage directory selection if needed via logger
     }
     return dir;
   },

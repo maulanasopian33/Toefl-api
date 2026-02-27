@@ -27,11 +27,11 @@ const checkAuth = async (req, res, next) => {
 
       next();
     } catch (error) {
-      console.log(error)
+      // Silent error or use logger
       res.status(403).send('Unauthorized');
     }
   } else {
-    console.log("tidak ada ")
+    // No token provided
     res.status(403).send('Unauthorized');
   }
 };

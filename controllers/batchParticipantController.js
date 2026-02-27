@@ -17,6 +17,36 @@ module.exports = {
         await t.rollback();
         return res.status(404).json({ status: false, message: 'Batch not found' });
       }
+
+      const now = new Date();
+
+      // 1. Cek status batch (Harus 'OPEN' atau 'RUNNING' tergantung kebijakan, tapi biasanya 'OPEN' untuk pendaftaran)
+      // User meminta: "peserta hanya bisa join ke batch saat masa pendaftaran dan batch sedang aktif berjalan"
+      // Kita asumsikan 'OPEN' adalah saat pendaftaran dibuka.
+      if (batch.status !== 'OPEN' && batch.status !== 'RUNNING') {
+        await t.rollback();
+        return res.status(400).json({ 
+          status: false, 
+          message: `Pendaftaran tidak diizinkan. Status batch saat ini: ${batch.status}` 
+        });
+      }
+
+      // 2. Cek masa pendaftaran (registration_open_at & registration_close_at)
+      if (batch.registration_open_at && now < new Date(batch.registration_open_at)) {
+        await t.rollback();
+        return res.status(400).json({ 
+          status: false, 
+          message: 'Pendaftaran belum dibuka.' 
+        });
+      }
+
+      if (batch.registration_close_at && now > new Date(batch.registration_close_at)) {
+        await t.rollback();
+        return res.status(400).json({ 
+          status: false, 
+          message: 'Masa pendaftaran telah berakhir.' 
+        });
+      }
       
       // Cek ketersediaan kursi (jika dibatasi)
       if (batch.max_participants !== null) {

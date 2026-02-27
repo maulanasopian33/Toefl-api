@@ -146,7 +146,6 @@ module.exports = {
         ]
       });
 
-      console.log(`[DEBUG] getBatchById id=${idBatch} found=${!!data}`);
 
       if (!data) {
         return res.status(404).json({

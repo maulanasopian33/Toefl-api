@@ -1,100 +1,73 @@
-const fs = require('fs');
-const path = require('path');
-const readline = require('readline');
-const { logger } = require('../utils/logger');
+const { auditlog } = require('../models');
+const { Op } = require('sequelize');
+const Joi = require('joi');
 
-/**
- * Mengambil log berdasarkan tanggal.
- * Membaca file log baris per baris dan mengonversinya menjadi array JSON.
- */
-exports.getLogsByDate = async (req, res, next) => {
+const auditLogSchema = Joi.object({
+  action: Joi.string().required(),
+  module: Joi.string().required(),
+  details: Joi.object().optional(),
+  source: Joi.string().valid('backend', 'frontend').optional()
+});
+
+exports.createAuditLog = async (req, res, next) => {
   try {
-    // Ambil tanggal dari query, atau gunakan tanggal hari ini jika tidak ada
-    const { date: queryDate, level: filterLevel, search: filterSearch } = req.query;
-    const date = queryDate || new Date().toISOString().split('T')[0];
-    // Validasi format tanggal YYYY-MM-DD
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(date)) {
-      return res.status(400).json({
-        status: false,
-        message: 'Format tanggal tidak valid. Gunakan format YYYY-MM-DD.'
-      });
+    const { error, value } = auditLogSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({ status: false, message: error.details[0].message });
     }
+    
+    const { action, module, details, source } = value;
+    
+    await auditlog.create({
+      userId: req.user ? req.user.uid : null,
+      action,
+      module,
+      details,
+      ipAddress: req.ip || req.connection.remoteAddress,
+      userAgent: req.get('User-Agent'),
+      source: source || 'frontend'
+    });
 
-    const logDir = path.join(__dirname, '..', 'logs');
-    const fileName = `${date}-application.log`;
-    const filePath = path.join(logDir, fileName);
-
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({
-        status: false,
-        message: `File log untuk tanggal ${date} tidak ditemukan.`,
-        data: []
-      });
-    }
-
-    const logs = [];
-    const fileStream = fs.createReadStream(filePath);
-    const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
-
-    for await (const line of rl) {
-      if (line) {
-        try {
-          const logObject = JSON.parse(line);
-
-          // Terapkan filter jika ada
-          const levelMatch = !filterLevel || logObject.level === filterLevel;
-          
-          const searchMatch = !filterSearch || 
-            (logObject.message && typeof logObject.message === 'string' && logObject.message.toLowerCase().includes(filterSearch.toLowerCase()));
-
-          if (levelMatch && searchMatch) {
-            logs.push(logObject);
-          }
-        } catch (parseError) {
-          // Jika ada baris yang bukan JSON valid (jarang terjadi dengan winston),
-          // kita bisa mencatatnya atau mengabaikannya. Di sini kita abaikan.
-          if (filterSearch && !filterLevel && line.toLowerCase().includes(filterSearch.toLowerCase())) {
-             // Untuk kasus log non-JSON, coba cari sebagai teks biasa
-             logs.push({ level: 'unknown', message: line });
-          }
-          console.error('Gagal mem-parsing baris log:', line, parseError);
-        }
-      }
-    }
-
-    res.status(200).json({ status: true, message: `Log untuk tanggal ${date} berhasil diambil.`, data: logs });
+    res.status(201).json({ status: true });
   } catch (error) {
-    next(error);
+    // We don't want to crash on logging failure
+    console.error('Audit Log Controller Error:', error);
+    res.status(500).json({ status: false });
   }
 };
 
-/**
- * Menyimpan log yang dikirim dari Frontend.
- * Route: POST /logs/client
- */
-exports.saveClientLog = async (req, res, next) => {
+exports.getAuditLogs = async (req, res, next) => {
   try {
-    const { level = 'info', message, metadata = {} } = req.body;
+    const { page = 1, limit = 20, module, userId, action, startDate, endDate } = req.query;
+    const offset = (page - 1) * limit;
 
-    if (!message) {
-      return res.status(400).json({ status: false, message: 'Log message is required.' });
+    const where = {};
+    if (module) where.module = module;
+    if (userId) where.userId = userId;
+    if (action) where.action = { [Op.like]: `%${action}%` };
+    if (startDate && endDate) {
+      where.createdAt = { [Op.between]: [new Date(startDate), new Date(endDate)] };
     }
 
-    // Capture User Info if available from middleware
-    const userId = req.user ? req.user.uid : 'anonymous';
-    
-    // Log to winston using the existing application log transport
-    logger.log({
-      level: level,
-      message: message,
-      source: 'frontend',
-      userId: userId,
-      ...metadata,
-      timestamp: new Date()
+    const { count, rows } = await auditlog.findAndCountAll({
+      where,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [['createdAt', 'DESC']],
+      include: [
+        { model: require('../models').user, as: 'user', attributes: ['name', 'email'] }
+      ]
     });
 
-    res.status(201).json({ status: true, message: 'Client log saved successfully.' });
+    res.status(200).json({
+      status: true,
+      data: {
+        totalItems: count,
+        totalPages: Math.ceil(count / limit),
+        currentPage: parseInt(page),
+        logs: rows
+      }
+    });
   } catch (error) {
     next(error);
   }

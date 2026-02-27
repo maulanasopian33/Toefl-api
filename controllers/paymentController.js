@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { Op, literal } = require('sequelize');
 const { logger } = require('../utils/logger');
 const { generateInvoiceNumber } = require('../utils/invoiceGenerator');
+const mailService = require('../services/mailService');
 const storageUtil = require('../utils/storage');
 
 module.exports = {
@@ -275,6 +276,20 @@ module.exports = {
 
       await payment.save({ user: req.user });
 
+      // Send Email Notification if status changed to 'paid'
+      if (status === 'paid' && payment.participantId) {
+        try {
+          const p = await db.batchparticipant.findByPk(payment.participantId, {
+            include: [{ model: db.user, as: 'user' }]
+          });
+          if (p && p.user) {
+            await mailService.sendPaymentConfirmation(p.user.email, p.user.name, payment.invoiceNumber);
+          }
+        } catch (mailErr) {
+          console.error('Failed to send payment confirmation email:', mailErr);
+        }
+      }
+
       res.json({
         status: true,
         message: 'Payment status updated successfully',
@@ -305,6 +320,20 @@ module.exports = {
       }
 
       await payment.save({ user: req.user });
+
+      // Send Email Notification if status changed to 'paid'
+      if (status === 'paid' && payment.participantId) {
+        try {
+          const p = await db.batchparticipant.findByPk(payment.participantId, {
+            include: [{ model: db.user, as: 'user' }]
+          });
+          if (p && p.user) {
+            await mailService.sendPaymentConfirmation(p.user.email, p.user.name, payment.invoiceNumber);
+          }
+        } catch (mailErr) {
+          console.error('Failed to send payment confirmation email:', mailErr);
+        }
+      }
 
       res.json({
         status: true,

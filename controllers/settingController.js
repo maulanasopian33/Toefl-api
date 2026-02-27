@@ -50,7 +50,10 @@ exports.updateSettings = async (req, res, next) => {
       'zona_waktu',
       'mata_uang',
       'hero_title',
-      'hero_subtitle'
+      'hero_subtitle',
+      'payment_instructions_bank',
+      'payment_instructions_offline',
+      'payment_offline_details'
     ];
 
     // Filter req.body untuk hanya menyertakan kolom yang diizinkan

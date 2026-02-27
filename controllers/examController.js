@@ -308,7 +308,7 @@ exports.getTestMetadata = async (req, res, next) => {
 
     try {
         const batch = await db.batch.findByPk(testId, {
-            attributes: ['idBatch', 'name', 'duration_minutes'],
+            attributes: ['idBatch', 'name', 'duration_minutes', 'start_date', 'end_date', 'status'],
             include: [{
                 model: db.section,
                 as: 'sections',
@@ -328,6 +328,25 @@ exports.getTestMetadata = async (req, res, next) => {
 
         if (!batch) {
             return res.status(404).json({ message: `Ujian dengan ID ${testId} tidak ditemukan.` });
+        }
+
+        const now = new Date();
+        // Cek apakah tes sudah bisa dimulai
+        if (batch.start_date && now < new Date(batch.start_date)) {
+            return res.status(403).json({ 
+                status: false, 
+                message: "Ujian belum dimulai. Silakan cek jadwal Anda.",
+                start_date: batch.start_date
+            });
+        }
+        
+        // Cek apakah tes sudah berakhir (beri toleransi 15 menit untuk persiapan/loading)
+        const closeGrace = 15 * 60 * 1000;
+        if (batch.end_date && now > new Date(new Date(batch.end_date).getTime() + closeGrace)) {
+             return res.status(403).json({ 
+                status: false, 
+                message: "Waktu pengerjaan ujian telah berakhir." 
+            });
         }
 
         // Hitung total pertanyaan dari semua section dan group
@@ -368,8 +387,13 @@ exports.getSectionData = async (req, res, next) => {
     const { sectionId } = req.params;
 
     const section = await db.section.findByPk(sectionId, {
-      attributes: ['idSection', 'namaSection', 'deskripsi'],
+      attributes: ['idSection', 'namaSection', 'deskripsi', 'batchId'],
       include: [{
+        model: db.batch,
+        as: 'batch',
+        attributes: ['start_date', 'end_date', 'status']
+      },
+      {
         model: db.sectionaudioinstruction,
         as: 'audioInstructions',
         attributes: ['audioUrl'],
@@ -403,6 +427,32 @@ exports.getSectionData = async (req, res, next) => {
 
     if (!section) {
       return res.status(404).json({ message: `Bagian dengan ID ${sectionId} tidak ditemukan.` });
+    }
+
+    // --- Validasi Waktu Pengerjaan ---
+    const now = new Date();
+    const batch = section.batch;
+    
+    if (batch) {
+        if (batch.start_date && now < new Date(batch.start_date)) {
+            return res.status(403).json({ 
+                status: false, 
+                message: "Ujian belum dimulai. Silakan tunggu jadwal yang ditentukan.",
+                scheduledStart: batch.start_date 
+            });
+        }
+        if (batch.end_date && now > new Date(batch.end_date)) {
+            return res.status(403).json({ 
+                status: false, 
+                message: "Waktu pengerjaan ujian telah berakhir." 
+            });
+        }
+        if (batch.status === 'FINISHED' || batch.status === 'CLOSED' || batch.status === 'CANCELLED') {
+            return res.status(403).json({ 
+                status: false, 
+                message: `Ujian tidak aktif (Status: ${batch.status}).` 
+            });
+        }
     }
 
     // Format output JSON sesuai permintaan
@@ -453,6 +503,28 @@ exports.submitTest = async (req, res, next) => {
 
     if (!Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({ message: "Body request tidak valid. 'answers' harus berupa array." });
+    }
+
+    // --- Validasi Waktu Submit ---
+    const batchCheck = await db.batch.findByPk(testId, { attributes: ['start_date', 'end_date', 'status'] });
+    const now = new Date();
+    if (batchCheck) {
+        // Cek apakah start_date sudah lewat
+        if (batchCheck.start_date && now < new Date(batchCheck.start_date)) {
+            return res.status(403).json({ 
+                status: false, 
+                message: "Ujian belum dimulai. Jawaban tidak dapat dikirim." 
+            });
+        }
+
+        // Beri toleransi 5 menit untuk submit setelah end_date (network delay, dll)
+        const gracePeriod = 5 * 60 * 1000; 
+        if (batchCheck.end_date && now > new Date(new Date(batchCheck.end_date).getTime() + gracePeriod)) {
+             return res.status(403).json({ 
+                status: false, 
+                message: "Waktu penyerahan jawaban telah berakhir (melewati batas waktu)." 
+            });
+        }
     }
 
     // 1. Cari user

@@ -31,7 +31,10 @@ module.exports = (sequelize, DataTypes) => {
     zona_waktu: DataTypes.STRING,
     mata_uang: DataTypes.STRING,
     hero_title: DataTypes.STRING,
-    hero_subtitle: DataTypes.TEXT
+    hero_subtitle: DataTypes.TEXT,
+    payment_instructions_bank: DataTypes.TEXT,
+    payment_instructions_offline: DataTypes.TEXT,
+    payment_offline_details: DataTypes.TEXT
   }, {
     sequelize,
     modelName: 'setting',

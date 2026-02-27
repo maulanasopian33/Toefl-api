@@ -1,3 +1,61 @@
+LATEST UPDATES - 27 Februari 2026
+==============================
+
+1. PENINGKATAN KEAMANAN & PRODUKSI (PRODUCTION READINESS)
+   - Menghapus seluruh pesan `console.log` debug pada backend (batchController, authMiddleware, storage, imageDownloader) untuk menjaga kebersihan log produksi dan performa.
+   - Implementasi batasan waktu pendaftaran (Registration Timing) pada `joinBatch`. Peserta hanya bisa mendaftar jika:
+     - Waktu saat ini berada di antara `registration_open_at` dan `registration_close_at`.
+     - Status batch adalah 'OPEN' atau 'RUNNING'.
+   - Implementasi batasan jadwal ujian (Test Schedule) pada `getSectionData` dan `submitTest`. Peserta hanya bisa mengakses soal dan mengirim jawaban jika:
+     - Waktu saat ini berada di antara `start_date` dan `end_date`.
+     - Memberikan toleransi (grace period) 5 menit untuk pengiriman jawaban setelah waktu berakhir untuk mengantisipasi delay jaringan.
+   - Penambahan field `start_date`, `end_date`, dan `status` pada metadata ujian untuk sinkronisasi tampilan frontend.
+   - Penambahan unit test `tests/timingRestrictions.test.js` untuk memverifikasi seluruh batasan waktu di atas.
+   - File yang disentuh: 
+     - node-be/controllers/batchParticipantController.js
+     - node-be/controllers/examController.js
+     - node-be/middlewares/authMiddleware.js
+     - node-be/utils/storage.js
+     - node-be/utils/imageDownloader.js
+     - node-be/tests/timingRestrictions.test.js
+
+Timestamp: 2026-02-27 10:30:00
+
+==============================
+
+1. PERBAIKAN BUG LAPORAN KEUANGAN (FINANCIAL RECAP)
+   - Mengganti referensi kolom yang salah `namaBatch` menjadi `name` pada breakdown per batch.
+   - Mengganti referensi kolom ambigu `id` menjadi `payment.id` pada breakdown metode pembayaran.
+   - Memperbaiki dua error SQL kritis saat mengakses endpoint `/financial-recap`.
+   - Menambahkan unit test `tests/adminStatsController.test.js` dan `tests/adminStatsController_ambiguous.test.js` (sementara).
+   - File yang disentuh: 
+     - node-be/controllers/adminStatsController.js
+
+Timestamp: 2026-02-07 14:40:00
+
+2. IMPLEMENTASI LAPORAN PESERTA (PARTICIPANT REPORT)
+   - Backend: Menambahkan endpoint `GET /api/reports/participant` pada `reportRoutes.js`.
+   - Backend: Implementasi `getParticipantReport` pada `reportController.js` dengan fitur pagination, search, dan filter batch.
+   - Frontend: Membuat halaman Laporan Peserta (`admin/reports/participant.vue`) untuk melihat daftar peserta, skor, dan status.
+   - Frontend: Implementasi composable `useParticipantReport.ts` untuk manajemen state dan fetch data laporan.
+   - Testing: Menambahkan unit test `tests/reportController.test.js` untuk memverifikasi logika backend.
+   - File yang disentuh: 
+     - node-be/controllers/reportController.js
+     - node-be/routes/reportRoutes.js
+     - nuxt-fe/pages/admin/reports/participant.vue
+     - nuxt-fe/composables/useParticipantReport.ts
+     - node-be/tests/reportController.test.js
+
+Timestamp: 2026-02-07 14:15:00
+
+2. PERBAIKAN IMPORT MIDDLEWARE REPORT ROUTES
+   - Memperbaiki path import `middleware` menjadi `middlewares` pada `reportRoutes.js`.
+   - Mengubah import `checkAuth` (default export) dan `checkRole` (file terpisah) agar sesuai dengan struktur export.
+   - Memperbaiki error startup server `MODULE_NOT_FOUND` dan `TypeError`.
+   - File yang disentuh: node-be/routes/reportRoutes.js
+
+Timestamp: 2026-02-07 13:50:00
+
 LATEST UPDATES - 06 Februari 2026
 ==============================
 
@@ -74,6 +132,38 @@ Timestamp: 2026-02-04 22:50:00
 
 Timestamp: 2026-02-04 20:55:00
 
+LATEST UPDATES - 2026-02-27
+==============================
+
+1. CERTIFICATE TEMPLATE CRUD & UPLOADS
+   - Implementasi file upload .docx menggunakan Multer
+   - Penyesuaian controller untuk handle FormData dan upload ke cdn/template
+   - Penyederhanaan logika format sertifikat untuk UX yang lebih baik
+   - File tersimpan di storage/template secara otomatis
+
+9. DYNAMIC PAYMENT INSTRUCTIONS
+   - Penambahan kolom `payment_instructions_bank`, `payment_instructions_offline`, dan `payment_offline_details` pada tabel `settings`.
+   - Update model `setting.js` dan controller `settingController.js` untuk mendukung field pembayaran dinamis.
+   - Penambahan migrasi database untuk field baru.
+   - File tersentuh: `migrations/...-add-payment-instructions-to-settings.js`, `models/setting.js`, `controllers/settingController.js`.
+
+23. OPTIMASI KEAMANAN & SISTEM AUDIT
+   - Implementasi tabel `audit_logs` untuk mencatat seluruh aktivitas sistem.
+   - Penambahan `auditMiddleware` untuk mencatat mutasi data (Create/Update/Delete).
+   - Aktivasi Rate Limiting dengan ambang batas yang disesuaikan (relaxed global, strict auth).
+   - Implementasi `MailService` menggunakan Nodemailer untuk notifikasi email otomatis.
+   - Validasi jadwal ujian (start_date/end_date) yang lebih ketat pada pengerjaan tes.
+   - Pembersihan debug log dan standarisasi logging menggunakan Winston.
+
+Timestamp: 2026-02-27 10:45:00
+
+10. REPORTING & CSV EXPORT
+   - Implementasi `csvGenerator.js` untuk konversi data ke CSV.
+   - Penambahan endpoint export laporan (Ujian, Peserta, Keuangan) ke `reportController.js`.
+   - File tersentuh: `utils/csvGenerator.js`, `controllers/reportController.js`, `routes/reportRoutes.js`.
+
+Timestamp: 2026-02-27 10:30:00
+
 LATEST UPDATES - 29 Januari 2026
 ==============================
 
@@ -144,152 +234,150 @@ LATEST UPDATES - 02 Februari 2026
    - Hal ini memastikan konfigurasi yang sudah ada di server production tidak tertimpa oleh file default dari repo saat deployment.
    - File yang disentuh: .github/workflows/toafl.yml, .github/workflows/toefl.yml
 
-Timestamp: 2026-02-02 22:30:00. 
- 
- L A T E S T 
- 
- U P D A T E S 
- 
- - 
- 
- 0 3 
- 
- F e b r u a r i 
- 
- 2 0 2 6 
- 
- = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
- 
- 1 . 
- 
- I M P L E M E N T A S I 
- 
- F U N G S I 
- 
- A U D I O 
- 
- P E R T A N Y A A N 
- 
- - 
- 
- M e n a m b a h k a n 
- 
- k o l o m 
- 
- a u d i o U r l 
- 
- p a d a 
- 
- t a b e l 
- 
- q u e s t i o n s 
- 
- m e l a l u i 
- 
- m i g r a s i 
- 
- d a t a b a s e . 
- 
- - 
- 
- M e m p e r b a r u i 
- 
- m o d e l 
- 
- q u e s t i o n 
- 
- u n t u k 
- 
- m e n d u k u n g 
- 
- f i e l d 
- 
- a u d i o U r l . 
- 
- - 
- 
- M o d i f i k a s i 
- 
- e x a m C o n t r o l l e r . j s 
- 
- p a d a 
- 
- e n d p o i n t 
- 
- g e t E x a m D a t a 
- 
- u p d a t e E x a m D a t a 
- 
- d a n 
- 
- g e t S e c t i o n D a t a 
- 
- u n t u k 
- 
- m e m p r o s e s 
- 
- a u d i o U r l 
- 
- p e r 
- 
- p e r t a n y a a n . 
- 
- - 
- 
- M e n a m b a h k a n 
- 
- i n t e g r a t i o n 
- 
- t e s t 
- 
- t e s t s / a u d i o Q u e s t i o n . t e s t . j s 
- 
- u n t u k 
- 
- m e m a s t i k a n 
- 
- f u n g s i o n a l i t a s 
- 
- s i m p a n 
- 
- d a n 
- 
- a m b i l 
- 
- d a t a 
- 
- a u d i o . 
- 
- - 
- 
- F i l e 
- 
- y a n g 
- 
- d i s e n t u h : 
- 
- - 
- 
- n o d e - b e / m i g r a t i o n s / 2 0 2 6 0 2 0 3 0 0 0 0 0 0 - a d d - a u d i o - u r l - t o - q u e s t i o n s . j s 
- 
- - 
- 
- n o d e - b e / m o d e l s / q u e s t i o n . j s 
- 
- - 
- 
- n o d e - b e / c o n t r o l l e r s / e x a m C o n t r o l l e r . j s 
- 
- - 
- 
- n o d e - b e / t e s t s / a u d i o Q u e s t i o n . t e s t . j s 
- 
- . 
- 
- T i m e s t a m p : 
- 
- 2 0 2 6 - 0 2 - 0 3 
- 
- 2 2 : 5 5 : 0 0 
- 
- 
+Timestamp: 2026-02-02 22:30:00. 
+ 
+ L A T E S T 
+ 
+ U P D A T E S 
+ 
+ - 
+ 
+ 0 3 
+ 
+ F e b r u a r i 
+ 
+ 2 0 2 6 
+ 
+ = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
+ 
+ 1 . 
+ 
+ I M P L E M E N T A S I 
+ 
+ F U N G S I 
+ 
+ A U D I O 
+ 
+ P E R T A N Y A A N 
+ 
+ - 
+ 
+ M e n a m b a h k a n 
+ 
+ k o l o m 
+ 
+ a u d i o U r l 
+ 
+ p a d a 
+ 
+ t a b e l 
+ 
+ q u e s t i o n s 
+ 
+ m e l a l u i 
+ 
+ m i g r a s i 
+ 
+ d a t a b a s e . 
+ 
+ - 
+ 
+ M e m p e r b a r u i 
+ 
+ m o d e l 
+ 
+ q u e s t i o n 
+ 
+ u n t u k 
+ 
+ m e n d u k u n g 
+ 
+ f i e l d 
+ 
+ a u d i o U r l . 
+ 
+ - 
+ 
+ M o d i f i k a s i 
+ 
+ e x a m C o n t r o l l e r . j s 
+ 
+ p a d a 
+ 
+ e n d p o i n t 
+ 
+ g e t E x a m D a t a 
+ 
+ u p d a t e E x a m D a t a 
+ 
+ d a n 
+ 
+ g e t S e c t i o n D a t a 
+ 
+ u n t u k 
+ 
+ m e m p r o s e s 
+ 
+ a u d i o U r l 
+ 
+ p e r 
+ 
+ p e r t a n y a a n . 
+ 
+ - 
+ 
+ M e n a m b a h k a n 
+ 
+ i n t e g r a t i o n 
+ 
+ t e s t 
+ 
+ t e s t s / a u d i o Q u e s t i o n . t e s t . j s 
+ 
+ u n t u k 
+ 
+ m e m a s t i k a n 
+ 
+ f u n g s i o n a l i t a s 
+ 
+ s i m p a n 
+ 
+ d a n 
+ 
+ a m b i l 
+ 
+ d a t a 
+ 
+ a u d i o . 
+ 
+ - 
+ 
+ F i l e 
+ 
+ y a n g 
+ 
+ d i s e n t u h : 
+ 
+ - 
+ 
+ n o d e - b e / m i g r a t i o n s / 2 0 2 6 0 2 0 3 0 0 0 0 0 0 - a d d - a u d i o - u r l - t o - q u e s t i o n s . j s 
+ 
+ - 
+ 
+ n o d e - b e / m o d e l s / q u e s t i o n . j s 
+ 
+ - 
+ 
+ n o d e - b e / c o n t r o l l e r s / e x a m C o n t r o l l e r . j s 
+ 
+ - 
+ 
+ n o d e - b e / t e s t s / a u d i o Q u e s t i o n . t e s t . j s 
+ 
+ . 
+ 
+ T i m e s t a m p : 
+ 
+ 2 0 2 6 - 0 2 - 0 3 
+ 
+ 2 2 : 5 5 : 0 0 

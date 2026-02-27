@@ -54,12 +54,13 @@ exports.getTemplateById = async (req, res, next) => {
 };
 
 /**
- * Create or Update Template (with dynamic formats)
+ * Create or Update Template (Simplified for single file upload)
  */
 exports.saveTemplate = async (req, res, next) => {
   const transaction = await db.sequelize.transaction();
   try {
-    const { id, name, status, formats } = req.body;
+    const { id, name, status } = req.body;
+    let fileDocx = req.file ? `/template/${req.file.filename}` : req.body.file_docx;
 
     let template;
     if (id) {
@@ -69,58 +70,55 @@ exports.saveTemplate = async (req, res, next) => {
         await transaction.rollback();
         return res.status(404).json({ status: false, message: 'Template not found' });
       }
-      await template.update({ name, status }, { transaction });
+      await template.update({ 
+        name, 
+        status: status === 'true' || status === true 
+      }, { transaction });
     } else {
       // Create
-      template = await db.certificate_template.create({ name, status }, { transaction });
+      template = await db.certificate_template.create({ 
+        name, 
+        status: status === 'true' || status === true 
+      }, { transaction });
     }
 
-    // Handle Formats (Upsert logic)
-    if (formats && Array.isArray(formats)) {
-      const existingFormatIds = formats.filter(f => f.id).map(f => f.id);
-      
-      // Delete formats not in the request
-      await db.certificate_template_format.destroy({
-        where: {
-          templateId: template.id,
-          id: { [db.Sequelize.Op.notIn]: existingFormatIds }
-        },
-        transaction
-      });
+    // Simplified Formats (Always ensure at least one format exists with the uploaded file)
+    // We treat this as a single-template-single-file system for the user, 
+    // but keep the DB structure for compatibility.
+    
+    // Check if format already exists for this template
+    let format = await db.certificate_template_format.findOne({
+      where: { templateId: template.id },
+      transaction
+    });
 
-      for (const format of formats) {
-        if (format.id) {
-          // Update
-          await db.certificate_template_format.update({
-            name: format.name,
-            file_docx: format.file_docx,
-            is_active: format.is_active
-          }, {
-            where: { id: format.id, templateId: template.id },
-            transaction
-          });
-        } else {
-          // Create
-          await db.certificate_template_format.create({
-            templateId: template.id,
-            name: format.name,
-            file_docx: format.file_docx,
-            is_active: format.is_active
-          }, { transaction });
-        }
-      }
+    if (format) {
+      // Update existing format
+      await format.update({
+        name: `Default Format for ${name}`,
+        file_docx: fileDocx || format.file_docx,
+        is_active: true
+      }, { transaction });
+    } else {
+      // Create default format
+      await db.certificate_template_format.create({
+        templateId: template.id,
+        name: `Default Format for ${name}`,
+        file_docx: fileDocx || '',
+        is_active: true
+      }, { transaction });
     }
 
     await transaction.commit();
 
-    const updatedTemplate = await db.certificate_template.findByPk(template.id, {
+    const result = await db.certificate_template.findByPk(template.id, {
       include: [{ model: db.certificate_template_format, as: 'formats' }]
     });
 
     res.status(200).json({
       status: true,
-      message: 'Template saved successfully',
-      data: updatedTemplate
+      message: 'Template berhasil disimpan',
+      data: result
     });
   } catch (error) {
     await transaction.rollback();

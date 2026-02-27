@@ -1,0 +1,10 @@
+LATEST UPDATES - 07 Februari 2026
+==============================
+
+1. PERBAIKAN IMPORT MIDDLEWARE REPORT ROUTES
+   - Memperbaiki path import `middleware` menjadi `middlewares` pada `reportRoutes.js`.
+   - Memperbaiki error startup server `MODULE_NOT_FOUND`.
+   - File yang disentuh: node-be/routes/reportRoutes.js
+
+Timestamp: 2026-02-07 13:45:00
+

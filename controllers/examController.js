@@ -441,14 +441,20 @@ exports.submitTest = async (req, res, next) => {
     const questionMap = new Map(questionsInfo.map(q => [q.idQuestion, q.group?.sectionId]));
 
     // 3. Simpan jawaban ke tabel useranswer
-    // Hapus jawaban lama untuk batch ini jika ada (mencegah duplikasi pengerjaan yang tidak rapi)
-    await db.useranswer.destroy({
-      where: { userId: localUserId, batchId: testId },
-      transaction
-    });
+    // [MODIFIED] Do NOT destroy old answers to support multi-attempts
+
+    // 4. Inisialisasi UserResult dengan status PENDING
+    // [MODIFIED] Use create instead of findOrCreate to support multi-attempts
+    const newUserResult = await db.userresult.create({
+      userId: localUserId,
+      batchId: testId,
+      status: 'PENDING',
+      submittedAt: new Date()
+    }, { transaction });
 
     const userAnswersToSave = answers.map(answer => ({
       userId: localUserId,
+      userResultId: newUserResult.id, // [ADDED] Link to specific result
       batchId: testId,
       sectionId: questionMap.get(answer.questionId) || null,
       questionId: answer.questionId,
@@ -457,26 +463,15 @@ exports.submitTest = async (req, res, next) => {
 
     await db.useranswer.bulkCreate(userAnswersToSave, { transaction });
 
-    // 4. Inisialisasi UserResult dengan status PENDING
-    // Kita buat recordnya dulu agar user tahu pengerjaan sudah tersimpan
-    await db.userresult.findOrCreate({
-      where: { userId: localUserId, batchId: testId },
-      defaults: {
-        userId: localUserId,
-        batchId: testId,
-        status: 'PENDING',
-        submittedAt: new Date()
-      },
-      transaction
-    });
-
     await transaction.commit();
 
     // 5. Kirim ke Antrean untuk kalkulasi di latar belakang
-    pushToQueue(localUserId, testId);
+    // [MODIFIED] Pass resultId to queue
+    pushToQueue(localUserId, testId, newUserResult.id);
 
     res.status(202).json({
       status: 'PENDING',
+      resultId: newUserResult.id,
       message: 'Jawaban Anda telah aman tersimpan. Skor sedang dihitung otomatis.'
     });
   } catch (error) {

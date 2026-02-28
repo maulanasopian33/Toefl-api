@@ -7,28 +7,28 @@ const db = require('../models');
  * Worker function to process scoring jobs.
  */
 async function scoringWorker(arg, cb) {
-  const { userId, batchId } = arg;
+  const { userId, batchId, resultId } = arg;
   try {
-    logger.info(`Starting background scoring for User: ${userId}, Batch: ${batchId}`);
+    logger.info(`Starting background scoring for User: ${userId}, Batch: ${batchId}, Result: ${resultId}`);
     
     // Calculate and update the record status to COMPLETED
-    const result = await calculateUserResult(userId, batchId);
+    const result = await calculateUserResult(userId, batchId, resultId);
     
-    // Update status to COMPLETED explicitly
+    // Update status to COMPLETED explicitly for this specific result
     await db.userresult.update(
       { status: 'COMPLETED' },
-      { where: { userId, batchId } }
+      { where: { id: resultId } }
     );
     
-    logger.info(`Background scoring completed for User: ${userId}`);
+    logger.info(`Background scoring completed for Result ID: ${resultId}`);
     cb(null, result);
   } catch (error) {
-    logger.error(`Background scoring failed for User: ${userId}`, error);
+    logger.error(`Background scoring failed for Result ID: ${resultId}`, error);
     
     // Update status to FAILED
     await db.userresult.update(
       { status: 'FAILED' },
-      { where: { userId, batchId } }
+      { where: { id: resultId } }
     ).catch(e => logger.error('Failed to update result status to FAILED', e));
     
     cb(error);
@@ -41,8 +41,8 @@ const queue = fastq(scoringWorker, 2);
 /**
  * Push a new scoring job to the queue.
  */
-const pushToQueue = (userId, batchId) => {
-  queue.push({ userId, batchId }, (err, result) => {
+const pushToQueue = (userId, batchId, resultId) => {
+  queue.push({ userId, batchId, resultId }, (err, result) => {
     if (err) {
       logger.error('Queue processing error:', err);
     }
@@ -56,12 +56,12 @@ const reconcilePendingResults = async () => {
   try {
     const pending = await db.userresult.findAll({
       where: { status: 'PENDING' },
-      attributes: ['userId', 'batchId']
+      attributes: ['id', 'userId', 'batchId']
     });
 
     if (pending.length > 0) {
       logger.info(`Reconciling ${pending.length} pending results...`);
-      pending.forEach(res => pushToQueue(res.userId, res.batchId));
+      pending.forEach(res => pushToQueue(res.userId, res.batchId, res.id));
     }
   } catch (error) {
     logger.error('Reconciliation error:', error);

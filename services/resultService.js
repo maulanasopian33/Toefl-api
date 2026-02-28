@@ -51,9 +51,14 @@ const findScoreInDetails = (details, correctCount, sectionId, fallbackCategory) 
  * Mengambil data statistik jawaban (correct/total) per section untuk user.
  * @private
  */
-async function _getInternalSectionStats(userId, batchId) {
+async function _getInternalSectionStats(userId, batchId, resultId = null) {
+  const whereClause = { userId, batchId };
+  if (resultId) {
+    whereClause.userResultId = resultId;
+  }
+
   const answers = await useranswer.findAll({
-    where: { userId, batchId },
+    where: whereClause,
     include: [
       { model: option, as: 'option', attributes: ['isCorrect'] },
       {
@@ -99,8 +104,9 @@ async function _getInternalSectionStats(userId, batchId) {
 
 /**
  * Menghitung skor akhir user untuk satu batch ujian.
+ * [MODIFIED] Added resultId to support multiple attempts.
  */
-async function calculateUserResult(userId, batchId) {
+async function calculateUserResult(userId, batchId, resultId = null) {
   try {
     const batchInfo = await batch.findByPk(batchId);
     if (!batchInfo) throw new Error(`Batch ${batchId} tidak ditemukan`);
@@ -110,7 +116,8 @@ async function calculateUserResult(userId, batchId) {
     const divisor = config.divisor || 3;
 
     // 1. Ambil statistik pengerjaan
-    const stats = await _getInternalSectionStats(userId, batchId);
+    // [MODIFIED] filter by resultId if available
+    const stats = await _getInternalSectionStats(userId, batchId, resultId);
     const { sectionMap, totalCorrect, totalAnswers } = stats;
 
     let finalScore = 0;
@@ -162,30 +169,38 @@ async function calculateUserResult(userId, batchId) {
       }
     }
 
-    // 4. Upsert hasil
-    const [userRes, created] = await userresult.findOrCreate({
-      where: { userId, batchId },
-      defaults: {
+    // 4. Update hasil
+    // [MODIFIED] If resultId is provided, we target that specific record
+    let targetResult;
+    if (resultId) {
+      targetResult = await userresult.findByPk(resultId);
+    } else {
+      // Fallback to legacy behavior (single latest result)
+      targetResult = await userresult.findOne({ where: { userId, batchId }, order: [['submittedAt', 'DESC']] });
+    }
+
+    if (!targetResult) {
+      // Should not happen with new logic, but for safety:
+      targetResult = await userresult.create({
         userId, batchId, totalQuestions: totalAnswers,
         correctCount: totalCorrect,
         wrongCount: totalAnswers - totalCorrect,
         score: finalScore,
-        submittedAt: new Date()
-      }
-    });
-
-    if (!created) {
-      await userRes.update({
+        submittedAt: new Date(),
+        status: 'COMPLETED'
+      });
+    } else {
+      await targetResult.update({
         totalQuestions: totalAnswers,
         correctCount: totalCorrect,
         wrongCount: totalAnswers - totalCorrect,
         score: finalScore,
-        submittedAt: new Date()
+        // status: updated by Queue Worker, but we could update here too if called synchronously
       });
     }
 
-    logger.info(`Result calculated: User ${userId}, Batch ${batchId}, Score ${finalScore}`);
-    return { userId, batchId, totalQuestions: totalAnswers, correctCount: totalCorrect, score: finalScore };
+    logger.info(`Result calculated: User ${userId}, Batch ${batchId}, Result ${resultId || targetResult.id}, Score ${finalScore}`);
+    return { userId, batchId, resultId: resultId || targetResult.id, totalQuestions: totalAnswers, correctCount: totalCorrect, score: finalScore };
   } catch (err) {
     logger.error(`calculateUserResult Error: ${err.message}`, { userId, batchId });
     throw err;

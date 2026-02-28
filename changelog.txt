@@ -1,3 +1,20 @@
+LATEST UPDATES - 28 Februari 2026
+==============================
+
+1. IMPLEMENTASI DUKUNGAN MULTI-ATTEMPT (PENGERJAAN BERULANG)
+   - Mengubah sistem agar setiap pengerjaan ujian (submit) menciptakan record hasil (`userresult`) baru, bukan menimpa yang lama.
+   - Menghubungkan jawaban user (`useranswer`) ke ID hasil spesifik (`userResultId`) untuk menjaga integritas data antar percobaan.
+   - Pembaruan antrean scoring (`submissionQueue.js`) untuk memproses skor berdasarkan ID hasil pengerjaan.
+   - Memastikan riwayat semua percobaan tersimpan dan dapat diakses di Dashboard User.
+   - Penambahan unit test `tests/multiAttemptSupport.test.js` untuk verifikasi fungsionalitas.
+   - File yang disentuh: 
+     - node-be/controllers/examController.js
+     - node-be/services/submissionQueue.js
+     - node-be/services/resultService.js
+     - node-be/tests/multiAttemptSupport.test.js
+
+Timestamp: 2026-02-28 12:30:00
+
 LATEST UPDATES - 27 Februari 2026
 ==============================
 

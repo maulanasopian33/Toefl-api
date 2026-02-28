@@ -64,14 +64,14 @@ app.use(helmet({
 
 // Rate Limiting
 const rateLimit = require('express-rate-limit');
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // Increased to 300 to accommodate multiple assets/reloads
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { status: false, message: 'Terlalu banyak permintaan, silakan coba lagi nanti.' }
-});
-app.use(limiter);
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 300, // Increased to 300 to accommodate multiple assets/reloads
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   message: { status: false, message: 'Terlalu banyak permintaan, silakan coba lagi nanti.' }
+// });
+// app.use(limiter);
 
 // Specific limiter for login to prevent brute force
 const loginLimiter = rateLimit({

@@ -5,6 +5,7 @@ const db = require('../models');
 const { sequelize } = require('../models');
 const { logger } = require('../utils/logger');
 const crypto = require('crypto');
+const cache = require('../utils/cache');const { pushToQueue } = require('../services/submissionQueue');
 
 /**
  * Mengambil seluruh data ujian (sections, groups, questions, options)
@@ -115,185 +116,36 @@ exports.getExamData = async (req, res, next) => {
   }
 };
 
+const examService = require('../services/examService');
+
 /**
  * Menyimpan atau memperbarui seluruh struktur data ujian.
  * Endpoint ini akan dipanggil oleh tombol "Simpan" utama di editor.
  */
 exports.updateExamData = async (req, res, next) => {
-  const transaction = await sequelize.transaction();
   try {
     const { examId: batchId } = req.params;
     const sectionsData = req.body;
+    const userEmail = req.user.email;
 
-    // --- 0. Cek Locking ---
-    const batch = await db.batch.findByPk(batchId, { attributes: ['start_date'] });
-    const submissionCount = await db.userresult.count({ where: { batchId } });
-    const isLocked = submissionCount > 0 || (batch?.start_date && new Date(batch.start_date) <= new Date());
+    const result = await examService.updateExamDataTransaction(batchId, sectionsData, userEmail);
 
-    if (isLocked) {
-      return res.status(403).json({ 
-        status: false, 
-        message: "Ujian terkunci karena sudah ada pengerjaan atau waktu ujian telah dimulai." 
+    // --- 4. Invalidate Cache ---
+    // Hapus metadata cache
+    cache.del(`metadata_${batchId}`);
+    
+    // Hapus cache untuk semua section yang terlibat
+    if (result.incomingSectionIds && result.incomingSectionIds.length > 0) {
+      result.incomingSectionIds.forEach(id => {
+        cache.del(`section_${id}`);
       });
     }
 
-    if (!Array.isArray(sectionsData)) {
-      return res.status(400).json({ message: "Struktur data yang dikirim tidak valid. Body harus berupa array." });
-    }
-
-    // --- 1. Kumpulkan semua ID dan data dari payload ---
-    const incomingSectionIds = [];
-    const incomingGroupIds = [];
-    const incomingQuestionIds = [];
-
-    const sectionsToUpsert = [];
-    const groupsToUpsert = [];
-    const questionsToUpsert = [];
-    const optionsToUpsert = [];
-    const audioInstructionsToUpsert = [];
-    const sectionAudioInstructionsToUpsert = [];
-
-    let sectionIndex = 0;
-    for (const section of sectionsData) {
-      sectionIndex++;
-      incomingSectionIds.push(section.id);
-      sectionsToUpsert.push({
-        idSection: section.id,
-        namaSection: section.name,
-        deskripsi: section.instructions,
-        urutan: sectionIndex, // Set urutan based on counter
-        batchId,
-        scoring_table_id: section.scoring_table_id || null,
-      });
-
-      if (section.audioUrl) {
-        sectionAudioInstructionsToUpsert.push({
-          sectionId: section.id,
-          audioUrl: section.audioUrl,
-          description: `Audio for section ${section.id}`,
-        });
-      }
-
-      for (const group of section.groups) {
-        incomingGroupIds.push(group.id);
-        groupsToUpsert.push({
-          idGroup: group.id,
-          passage: group.passage,
-          sectionId: section.id,
-          batchId, // Denormalisasi untuk mempermudah penghapusan
-        });
-
-        if (group.audioUrls && Array.isArray(group.audioUrls)) {
-          group.audioUrls.forEach((url, index) => {
-            if (url) {
-              audioInstructionsToUpsert.push({
-                groupId: group.id,
-                audioUrl: url,
-                description: `Audio ${index + 1} for group ${group.id}`,
-              });
-            }
-          });
-        }
-
-        for (const question of group.questions) {
-          incomingQuestionIds.push(question.id);
-          questionsToUpsert.push({
-            idQuestion: question.id,
-            text: question.question,
-            type: question.type,
-            groupId: group.id,
-            audioUrl: question.audioUrl,
-            options_alignment: question.options_alignment || 'LTR',
-          });
-
-          question.options.forEach((optionText, index) => {
-            // Buat ID unik dan deterministik untuk opsi
-            // Gunakan MD5 hash dari teks untuk memastikan ID stabil tapi tetap unik
-            const hash = crypto.createHash('md5').update(optionText.trim()).digest('hex').substring(0, 8);
-            const idOption = `opt-${question.id}-${index}-${hash}`;
-            
-            optionsToUpsert.push({
-              idOption,
-              text: optionText,
-              isCorrect: optionText.trim() === question.correctAnswer?.trim(),
-              questionId: question.id,
-            });
-          });
-        }
-      }
-    }
-
-    // --- 2. Hapus data lama yang tidak ada di payload (Delete phase) ---
-    // Urutan: dari anak ke induk untuk menghindari FK constraint errors.
-
-    // Hapus Opsi untuk pertanyaan yang ada di payload (akan dibuat ulang)
-    if (incomingQuestionIds.length > 0) {
-      await db.option.destroy({ where: { questionId: { [Op.in]: incomingQuestionIds } }, transaction });
-    }
-
-    // Hapus Questions yang tidak ada di payload, tapi pastikan hanya dari batch ini
-    const questionsToDelete = await db.question.findAll({
-      attributes: ['idQuestion'],
-      where: { idQuestion: { [Op.notIn]: incomingQuestionIds } },
-      include: [{
-        model: db.group, as: 'group', attributes: [], required: true,
-        where: { batchId } // Menggunakan batchId yang sudah didenormalisasi di tabel group
-      }],
-      transaction
-    });
-    const questionIdsToDelete = questionsToDelete.map(q => q.idQuestion);
-    if (questionIdsToDelete.length > 0) {
-      // Hapus dulu opsi dari pertanyaan yang akan dihapus
-      await db.option.destroy({ where: { questionId: { [Op.in]: questionIdsToDelete } }, transaction });
-      await db.question.destroy({ where: { idQuestion: { [Op.in]: questionIdsToDelete } }, transaction });
-    }
-
-    // Hapus GroupAudioInstructions untuk grup yang ada di payload (akan dibuat ulang)
-    if (incomingGroupIds.length > 0) {
-      await db.groupaudioinstruction.destroy({ where: { groupId: { [Op.in]: incomingGroupIds } }, transaction });
-    }
-
-    // Hapus SectionAudioInstructions untuk section yang ada di payload (akan dibuat ulang)
-    if (incomingSectionIds.length > 0) {
-      await db.sectionaudioinstruction.destroy({ where: { sectionId: { [Op.in]: incomingSectionIds } }, transaction });
-    }
-
-    // Hapus Groups yang tidak ada di payload untuk batch ini
-    await db.group.destroy({ where: { batchId: batchId, idGroup: { [Op.notIn]: incomingGroupIds } }, transaction });
-
-    // Hapus Sections yang tidak ada di payload untuk batch ini
-    await db.section.destroy({ where: { batchId: batchId, idSection: { [Op.notIn]: incomingSectionIds } }, transaction });
-
-    // --- 3. Upsert (Update or Insert) data baru (Upsert phase) ---
-    // Urutan: dari induk ke anak.
-
-    await db.section.bulkCreate(sectionsToUpsert, { updateOnDuplicate: ["namaSection", "deskripsi", "urutan", "scoring_table_id"], transaction });
-    await db.group.bulkCreate(groupsToUpsert, { updateOnDuplicate: ["passage", "sectionId"], transaction });
-
-    if (audioInstructionsToUpsert.length > 0) {
-      await db.groupaudioinstruction.bulkCreate(audioInstructionsToUpsert, { transaction });
-    }
-
-    if (sectionAudioInstructionsToUpsert.length > 0) {
-      await db.sectionaudioinstruction.bulkCreate(sectionAudioInstructionsToUpsert, { transaction });
-    }
-
-    await db.question.bulkCreate(questionsToUpsert, { updateOnDuplicate: ["text", "type", "audioUrl", "options_alignment"], transaction });
-
-    if (optionsToUpsert.length > 0) {
-      await db.option.bulkCreate(optionsToUpsert, { transaction });
-    }
-
-    await transaction.commit();
-    logger.info({
-      message: `Exam data updated for batch ID: ${batchId}`,
-      action: 'UPDATE_EXAM_DATA',
-      user: req.user.email,
-      details: { batchId }
-    });
     res.status(200).json({ message: `Data ujian untuk batch ${batchId} berhasil diperbarui.` });
   } catch (error) {
-    await transaction.rollback();
+    if (error.status) {
+      return res.status(error.status).json({ status: false, message: error.message });
+    }
     next(error);
   }
 };
@@ -305,8 +157,14 @@ exports.updateExamData = async (req, res, next) => {
  */
 exports.getTestMetadata = async (req, res, next) => {
     const { testId } = req.params; // testId adalah batchId
+    const cacheKey = `metadata_${testId}`;
 
     try {
+        const cachedData = cache.get(cacheKey);
+        if (cachedData) {
+           return res.json(cachedData);
+        }
+
         const batch = await db.batch.findByPk(testId, {
             attributes: ['idBatch', 'name', 'duration_minutes', 'start_date', 'end_date', 'status'],
             include: [{
@@ -362,7 +220,7 @@ exports.getTestMetadata = async (req, res, next) => {
             .sort((a, b) => (a.urutan || 0) - (b.urutan || 0))
             .map(s => ({ id: s.idSection, name: s.namaSection }));
 
-        res.json({
+        const responseData = {
             id: batch.idBatch,
             name: batch.name,
             start_date : batch.start_date,
@@ -370,7 +228,10 @@ exports.getTestMetadata = async (req, res, next) => {
             totalTime: batch.duration_minutes,
             totalQuestions: totalQuestions,
             sectionOrder: sectionOrder
-        });
+        };
+
+        cache.set(cacheKey, responseData, 300); // 5 menit
+        res.json(responseData);
 
     } catch (error) {
         next(error);
@@ -385,6 +246,31 @@ exports.getTestMetadata = async (req, res, next) => {
 exports.getSectionData = async (req, res, next) => {
   try {
     const { sectionId } = req.params;
+    const cacheKey = `section_${sectionId}`;
+
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      // Perlu dilakukan validasi waktu tetap secara real-time walaupun data section di-cache.
+      // Validasi waktu diletakkan setelah cache untuk mencegah caching mencegah timeout ujian.
+      // Namun "batch status" ada di dalam cachedData.batch
+      const now = new Date();
+      const batch = cachedData._batchInfo; // kita simpan sementara di _batchInfo untuk validasi
+      if (batch) {
+        if (batch.start_date && now < new Date(batch.start_date)) {
+            return res.status(403).json({ status: false, message: "Ujian belum dimulai.", scheduledStart: batch.start_date  });
+        }
+        if (batch.end_date && now > new Date(batch.end_date)) {
+            return res.status(403).json({ status: false, message: "Waktu pengerjaan ujian telah berakhir." });
+        }
+        if (batch.status === 'FINISHED' || batch.status === 'CLOSED' || batch.status === 'CANCELLED') {
+            return res.status(403).json({ status: false, message: `Ujian tidak aktif (Status: ${batch.status}).` });
+        }
+      }
+      
+      const responseWithoutBatchInfo = { ...cachedData };
+      delete responseWithoutBatchInfo._batchInfo;
+      return res.status(200).json(responseWithoutBatchInfo);
+    }
 
     const section = await db.section.findByPk(sectionId, {
       attributes: ['idSection', 'namaSection', 'deskripsi', 'batchId'],
@@ -479,6 +365,16 @@ exports.getSectionData = async (req, res, next) => {
       })),
     };
 
+    const cacheDataToStore = {
+        ...formattedData,
+        _batchInfo: batch ? { 
+            start_date: batch.start_date, 
+            end_date: batch.end_date, 
+            status: batch.status 
+        } : null
+    };
+
+    cache.set(cacheKey, cacheDataToStore, 300); // cache 5 menit
     res.status(200).json(formattedData);
   } catch (error) {
     next(error);
@@ -561,16 +457,27 @@ exports.submitTest = async (req, res, next) => {
 
     await db.useranswer.bulkCreate(userAnswersToSave, { transaction });
 
+    // 4. Inisialisasi UserResult dengan status PENDING
+    // Kita buat recordnya dulu agar user tahu pengerjaan sudah tersimpan
+    await db.userresult.findOrCreate({
+      where: { userId: localUserId, batchId: testId },
+      defaults: {
+        userId: localUserId,
+        batchId: testId,
+        status: 'PENDING',
+        submittedAt: new Date()
+      },
+      transaction
+    });
+
     await transaction.commit();
 
-    // 4. Hitung skor menggunakan ResultService (Logical Centrally)
-    const result = await calculateUserResult(localUserId, testId);
+    // 5. Kirim ke Antrean untuk kalkulasi di latar belakang
+    pushToQueue(localUserId, testId);
 
-    res.status(201).json({
-      score: result.score,
-      totalQuestions: result.totalQuestions,
-      correctCount: result.correctCount,
-      wrongCount: result.totalQuestions - result.correctCount,
+    res.status(202).json({
+      status: 'PENDING',
+      message: 'Jawaban Anda telah aman tersimpan. Skor sedang dihitung otomatis.'
     });
   } catch (error) {
     if (transaction) await transaction.rollback();
@@ -596,6 +503,7 @@ exports.getTestResult = async (req, res, next) => {
     const userResult = await db.userresult.findOne({
       where: { id: historyId, userId: uid },
       include: [{ model: db.batch, as: 'batch', attributes: ['name', 'scoring_type', 'scoring_config'] }],
+      attributes: ['id', 'batchId', 'score', 'status', 'totalQuestions', 'correctCount', 'wrongCount', 'submittedAt'],
     });
 
     if (!userResult) {
@@ -644,9 +552,10 @@ exports.getTestResult = async (req, res, next) => {
     });
 
     // 4. Kirim respons
-    res.status(200).json({
+    const result = {
       testName: userResult.batch.name,
       submittedAt: userResult.submittedAt,
+      status: userResult.status,
       finalScore: userResult.score,
       summary: {
         totalQuestions: userResult.totalQuestions,
@@ -655,7 +564,17 @@ exports.getTestResult = async (req, res, next) => {
       },
       sectionScores: sectionsForResponse,
       detailedAnswers: detailedAnswers,
-    });
+    };
+    
+    // If pending, hide sensitive details
+    if (userResult.status === 'PENDING') {
+      result.finalScore = null;
+      result.summary = null;
+      result.sectionScores = [];
+      result.detailedAnswers = [];
+    }
+
+    res.status(200).json(result);
 
   } catch (error) {
     next(error);
@@ -677,7 +596,7 @@ exports.getTestHistoryList = async (req, res, next) => {
         as: 'batch',
         attributes: ['name'],
       }, ],
-      attributes: ['id', 'score', 'submittedAt'], // 'id' di sini adalah historyId
+      attributes: ['id', 'score', 'status', 'submittedAt'], // 'id' di sini adalah historyId
       order: [
         ['submittedAt', 'DESC']
       ],
@@ -691,6 +610,7 @@ exports.getTestHistoryList = async (req, res, next) => {
         batchName: item.batch ? item.batch.name : 'Nama Tes Tidak Tersedia',
         completedDate: item.submittedAt, // Sudah dalam format ISO 8601
         score: item.score,
+        status: item.status,
         detailsUrl: `/history/${historyId}`
       };
     });

@@ -12,7 +12,9 @@ exports.getStats = async (req, res) => {
       audioCount,
       userCount,
       recentUsers,
-      recentPayments
+      recentPayments,
+      queuePending,
+      queueFailed
     ] = await Promise.all([
       batch.count(),
       batch.count({ where: { status: 'OPEN' } }), // Asumsi status aktif = OPEN
@@ -31,7 +33,9 @@ exports.getStats = async (req, res) => {
         order: [['createdAt', 'DESC']],
         // include: [{ model: user, as: 'user', attributes: ['name', 'email'] }], // Removed due to missing direct association
         attributes: ['amount', 'status', 'createdAt']
-      })
+      }),
+      require('../models').userresult.count({ where: { status: 'PENDING' } }),
+      require('../models').userresult.count({ where: { status: 'FAILED' } })
     ]);
 
     // Trend user monthly (simple 6 months back)
@@ -48,7 +52,9 @@ exports.getStats = async (req, res) => {
           group: groupCount,
           question: questionCount,
           audio: audioCount,
-          user: userCount
+          user: userCount,
+          queuePending,
+          queueFailed
         },
         recentActivity: {
           users: recentUsers,

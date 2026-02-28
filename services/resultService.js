@@ -11,6 +11,7 @@ const {
 } = require('../models');
 const { logger } = require('../utils/logger');
 const { Op } = require('sequelize');
+const cache = require('../utils/cache');
 
 /**
  * Mendapatkan kategori fallback (listening/structure/reading) berdasarkan nama section.
@@ -130,10 +131,17 @@ async function calculateUserResult(userId, batchId) {
 
       let allDetails = [];
       if (tableIds.length > 0) {
-        allDetails = await scoringdetail.findAll({
-          where: { scoring_table_id: { [Op.in]: [...new Set(tableIds)] } },
-          attributes: ['scoring_table_id', 'section_category', 'correct_count', 'converted_score']
-        });
+        const cacheKey = `scoring_details_${[...new Set(tableIds)].sort().join('_')}`;
+        allDetails = cache.get(cacheKey);
+
+        if (!allDetails) {
+          allDetails = await scoringdetail.findAll({
+            where: { scoring_table_id: { [Op.in]: [...new Set(tableIds)] } },
+            attributes: ['scoring_table_id', 'section_category', 'correct_count', 'converted_score']
+          });
+          // Cache scoring details selama 1 jam karena data ini jarang berubah
+          cache.set(cacheKey, allDetails, 3600);
+        }
       }
 
       // 3. Hitung skor per section
@@ -202,10 +210,16 @@ async function getSectionScores(userId, batchId, scoringType, scoringConfig = {}
 
     let allDetails = [];
     if (tableIds.length > 0) {
-      allDetails = await scoringdetail.findAll({
-        where: { scoring_table_id: { [Op.in]: [...new Set(tableIds)] } },
-        attributes: ['scoring_table_id', 'section_category', 'correct_count', 'converted_score']
-      });
+      const cacheKey = `scoring_details_${[...new Set(tableIds)].sort().join('_')}`;
+      allDetails = cache.get(cacheKey);
+
+      if (!allDetails) {
+        allDetails = await scoringdetail.findAll({
+          where: { scoring_table_id: { [Op.in]: [...new Set(tableIds)] } },
+          attributes: ['scoring_table_id', 'section_category', 'correct_count', 'converted_score']
+        });
+        cache.set(cacheKey, allDetails, 3600);
+      }
     }
 
     const result = {};

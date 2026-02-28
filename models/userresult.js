@@ -21,6 +21,10 @@ module.exports = (sequelize, DataTypes) => {
     correctCount: DataTypes.INTEGER,
     wrongCount: DataTypes.INTEGER,
     score: DataTypes.INTEGER,
+    status: {
+      type: DataTypes.ENUM('PENDING', 'COMPLETED', 'FAILED'),
+      defaultValue: 'PENDING'
+    },
     submittedAt: DataTypes.DATE
   }, {
     sequelize,

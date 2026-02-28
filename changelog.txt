@@ -1,6 +1,22 @@
 LATEST UPDATES - 27 Februari 2026
 ==============================
 
+1. PERBAIKAN SINKRONISASI DATABASE & MIGRASI
+   - Menjalankan migrasi tertunda yang menyebabkan error `Unknown column` pada tabel `settings`.
+   - Memperbaiki migrasi `audit_logs` (Foreign Key constraint error) dengan menyesuaikan tipe data `userId` dari UUID ke STRING agar sesuai dengan kolom `uid` pada tabel `users`.
+   - Sinkronisasi model `auditlog.js` dan `userresult.js` dengan skema database terbaru.
+   - Penambahan unit test `tests/migrationSync.test.js` untuk memverifikasi integritas skema database.
+   - File yang disentuh: 
+     - node-be/migrations/20260227110000-create-audit-log.js
+     - node-be/models/auditlog.js
+     - node-be/models/userresult.js
+     - node-be/tests/migrationSync.test.js
+
+Timestamp: 2026-02-27 21:35:00
+
+LATEST UPDATES - 27 Februari 2026
+==============================
+
 1. PENINGKATAN KEAMANAN & PRODUKSI (PRODUCTION READINESS)
    - Menghapus seluruh pesan `console.log` debug pada backend (batchController, authMiddleware, storage, imageDownloader) untuk menjaga kebersihan log produksi dan performa.
    - Implementasi batasan waktu pendaftaran (Registration Timing) pada `joinBatch`. Peserta hanya bisa mendaftar jika:
@@ -11,6 +27,12 @@ LATEST UPDATES - 27 Februari 2026
      - Memberikan toleransi (grace period) 5 menit untuk pengiriman jawaban setelah waktu berakhir untuk mengantisipasi delay jaringan.
    - Penambahan field `start_date`, `end_date`, dan `status` pada metadata ujian untuk sinkronisasi tampilan frontend.
    - Penambahan unit test `tests/timingRestrictions.test.js` untuk memverifikasi seluruh batasan waktu di atas.
+   - Perbaikan tautan laporan peserta (rename `participant.vue` ke `peserta.vue`).
+   - Implementasi **Asynchronous Submission Queue** menggunakan `fastq` untuk menjamin keamanan data saat trafik tinggi.
+   - Implementasi halaman **Detail Hasil Ujian** (/history/[id]) untuk analisis skor mendalam bagi user.
+   - Implementasi halaman panduan admin dan kontak support.
+   - Penambahan widget status antrean (Queue Status) pada Dashboard Admin.
+   - Pembersihan file legacy (`test.vue`, `index.vue.bak`) dan konsolidasi log sistem.
    - File yang disentuh: 
      - node-be/controllers/batchParticipantController.js
      - node-be/controllers/examController.js
@@ -154,8 +176,14 @@ LATEST UPDATES - 2026-02-27
    - Implementasi `MailService` menggunakan Nodemailer untuk notifikasi email otomatis.
    - Validasi jadwal ujian (start_date/end_date) yang lebih ketat pada pengerjaan tes.
    - Pembersihan debug log dan standarisasi logging menggunakan Winston.
+   - Refactoring "Fat Controller" ke `examService.js` untuk meningkatkan stabilitas dan testability.
+   - Implementasi in-memory caching (`node-cache`) pada endpoint metadata dan section ujian untuk performa tinggi.
+   - Optimasi Database Connection Pool (max 100) untuk menangani lonjakan trafik serentak (High Concurrency).
+   - Implementasi caching pada logika perhitungan skor (`resultService.js`) untuk efisiensi CPU dan I/O database.
+   - Implementasi **Asynchronous Submission Queue** menggunakan `fastq` untuk menjamin data tersimpan meskipun trafik sangat tinggi.
+   - Penambahan kolom `status` pada hasil ujian untuk mendukung pemrosesan latar belakang (Async Scoring).
 
-Timestamp: 2026-02-27 10:45:00
+Timestamp: 2026-02-27 11:15:00
 
 10. REPORTING & CSV EXPORT
    - Implementasi `csvGenerator.js` untuk konversi data ke CSV.

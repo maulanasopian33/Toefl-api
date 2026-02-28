@@ -30,10 +30,15 @@ const scoringRoutes = require('./routes/scoringRoutes');
 const bankRoutes = require('./routes/bankRoutes');
 const certificateTemplateRoutes = require('./routes/certificateTemplateRoutes');
 const reportRoutes = require('./routes/reportRoutes');
-const logRoutes = require('./routes/logRoutes');
+
 
 
 const { httpLogger } = require('./utils/logger');
+
+const { reconcilePendingResults } = require('./services/submissionQueue');
+
+// Run reconciliation for any interrupted scoring jobs
+reconcilePendingResults().catch(err => console.error('Reconciliation failed:', err));
 
 const app = express();
 

@@ -1,4 +1,5 @@
 const { auditlog } = require('../models');
+const { logger } = require('../utils/logger');
 
 /**
  * Middleware to capture and log administrative actions.

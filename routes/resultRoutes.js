@@ -18,5 +18,8 @@ router.get('/answers/:attemptId', checkAuth, checkPermission('result.view_all'),
 // POST /results/recalculate-batch - Hitung ulang semua skor dalam satu batch (admin only)
 router.post('/recalculate-batch', checkAuth, checkPermission('result.view_all'), resultController.recalculateBatch);
 
+// DELETE /results/:resultId - Hapus hasil tes (admin only)
+router.delete('/:resultId', checkAuth, checkPermission('result.view_all'), resultController.deleteResult);
+
 
 module.exports = router;

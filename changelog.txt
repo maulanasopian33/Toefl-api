@@ -35,7 +35,17 @@ LATEST UPDATES - 01 Maret 2026
      - Backend: Endpoint `POST /results/recalculate-batch`.
      - Frontend: Composable `useRecalculateBatch` dan update pada `index.vue`.
 
-Timestamp: 2026-03-01 18:00:00
+5. FITUR HAPUS HASIL TEST PESERTA
+   - Menambahkan ikon "Hapus" pada tabel hasil tes di Dashboard Admin.
+   - Implementasi keamanan dengan konfirmasi sebelum proses menghapus dilakukan secara permanen.
+   - Menghapus data hasil tes (`userresult`) beserta seluruh detail jawaban (`useranswer`) secara atomik menggunakan database transaction.
+   - File yang disentuh:
+     - node-be/controllers/resultController.js
+     - node-be/routes/resultRoutes.js
+     - nuxt-fe/composables/useAdminResults.ts
+     - nuxt-fe/pages/admin/results/batch/index.vue
+
+Timestamp: 2026-03-01 19:20:00
 
 LATEST UPDATES - 01 Maret 2026
 ==============================

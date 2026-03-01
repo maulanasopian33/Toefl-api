@@ -76,7 +76,8 @@ exports.getAuditLogs = async (req, res, next) => {
     if (userIds.length > 0) {
       const users = await user.findAll({
         where: { uid: userIds },
-        attributes: ['uid', 'name', 'email']
+        attributes: ['uid', 'name', 'email'],
+        include: [{ model: require('../models').detailuser, as: 'detailuser' }]
       });
       users.forEach(u => { userMap[u.uid] = u; });
     }

@@ -58,7 +58,8 @@ module.exports = {
         
         const users = await db.user.findAll({
           where: whereUser,
-          attributes: ['uid', 'name', 'email']
+          attributes: ['uid', 'name', 'email'],
+          include: [{ model: db.detailuser, as: 'detailuser' }]
         });
         users.forEach(u => { userMap[u.uid] = u; });
       }

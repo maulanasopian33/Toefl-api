@@ -26,7 +26,8 @@ exports.getStats = async (req, res) => {
       user.findAll({
         limit: 5,
         order: [['createdAt', 'DESC']],
-        attributes: ['name', 'email', 'createdAt']
+        attributes: ['name', 'email', 'createdAt'],
+        include: [{ model: require('../models').detailuser, as: 'detailuser' }]
       }),
       payment.findAll({
         limit: 5,

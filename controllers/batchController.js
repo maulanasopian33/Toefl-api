@@ -32,10 +32,20 @@ module.exports = {
 
       // 1. Create the Batch
       let finalScoringConfig = scoring_config;
-      if (scoring_type === 'RAW' && scoring_config) {
+      
+      // Robust parsing if scoring_config is a string
+      if (typeof finalScoringConfig === 'string') {
+        try {
+          finalScoringConfig = JSON.parse(finalScoringConfig);
+        } catch (e) {
+          finalScoringConfig = {};
+        }
+      }
+
+      if (scoring_type === 'RAW' || (finalScoringConfig && finalScoringConfig.initialScore !== undefined)) {
         finalScoringConfig = {
-          ...scoring_config,
-          initialScore: parseInt(scoring_config.initialScore) || 0
+          ...finalScoringConfig,
+          initialScore: parseInt(finalScoringConfig?.initialScore) || 0
         };
       }
 
@@ -81,10 +91,20 @@ module.exports = {
 
       if (result) {
         const creator = await user.findByPk(result.created_by, {
-          attributes: ['uid', 'name', 'email']
+          attributes: ['uid', 'name', 'email'],
+          include: [{ model: db.detailuser, as: 'detailuser' }]
         });
         const responseData = result.toJSON();
         responseData.creator = creator;
+        
+        // Ensure scoring_config is an object
+        if (typeof responseData.scoring_config === 'string') {
+          try {
+            responseData.scoring_config = JSON.parse(responseData.scoring_config);
+          } catch (e) {
+            responseData.scoring_config = {};
+          }
+        }
         
         return res.status(201).json({
           status: true,
@@ -140,10 +160,11 @@ module.exports = {
       if (creatorIds.length > 0) {
         const creators = await user.findAll({
           where: { uid: creatorIds },
-          attributes: ['uid', 'name']
+          attributes: ['uid', 'name'],
+          include: [{ model: db.detailuser, as: 'detailuser' }]
         });
         creators.forEach(c => {
-          creatorMap[c.uid] = { uid: c.uid, name: c.name };
+          creatorMap[c.uid] = c.toJSON();
         });
       }
 
@@ -151,6 +172,16 @@ module.exports = {
       const result = batchesData.map(b => {
         const item = b.toJSON();
         item.creator = creatorMap[item.created_by] || null;
+        
+        // Ensure scoring_config is an object
+        if (typeof item.scoring_config === 'string') {
+          try {
+            item.scoring_config = JSON.parse(item.scoring_config);
+          } catch (e) {
+            item.scoring_config = {};
+          }
+        }
+        
         return item;
       });
 
@@ -214,9 +245,10 @@ module.exports = {
       if (allUserIds.length > 0) {
         const users = await user.findAll({
           where: { uid: allUserIds },
-          attributes: ['uid', 'name', 'email', 'picture']
+          attributes: ['uid', 'name', 'email', 'picture'],
+          include: [{ model: db.detailuser, as: 'detailuser' }]
         });
-        users.forEach(u => { userMap[u.uid] = u; });
+        users.forEach(u => { userMap[u.uid] = u.toJSON(); });
       }
 
       // Step 3: Map kembali data user ke objek data
@@ -224,6 +256,15 @@ module.exports = {
       
       // Pasang creator
       responseData.creator = userMap[responseData.created_by] || null;
+      
+      // Ensure scoring_config is an object
+      if (typeof responseData.scoring_config === 'string') {
+        try {
+          responseData.scoring_config = JSON.parse(responseData.scoring_config);
+        } catch (e) {
+          responseData.scoring_config = {};
+        }
+      }
       
       // Pasang user ke masing-masing participant
       if (responseData.participants) {
@@ -333,15 +374,23 @@ module.exports = {
       delete updateData.idBatch;
       delete updateData.created_by;
 
-      // Ensure scoring_config initialScore is a number if present
-      if (updateData.scoring_type === 'RAW' && updateData.scoring_config) {
-        updateData.scoring_config = {
-          ...updateData.scoring_config,
-          initialScore: parseInt(updateData.scoring_config.initialScore) || 0
-        };
-      } else if (updateData.scoring_config && updateData.scoring_config.initialScore !== undefined) {
-        // Handle case where only scoring_config is sent
-        updateData.scoring_config.initialScore = parseInt(updateData.scoring_config.initialScore) || 0;
+      // Ensure scoring_config is properly handled
+      if (updateData.scoring_config) {
+        let sc = updateData.scoring_config;
+        if (typeof sc === 'string') {
+          try {
+            sc = JSON.parse(sc);
+          } catch (e) {
+            sc = {};
+          }
+        }
+        
+        // Ensure initialScore is a number if we are in RAW mode or it's specifically provided
+        if (updateData.scoring_type === 'RAW' || sc.initialScore !== undefined) {
+          sc.initialScore = parseInt(sc.initialScore) || 0;
+        }
+        
+        updateData.scoring_config = sc;
       }
 
       const [updated] = await batch.update(updateData, {
@@ -356,9 +405,20 @@ module.exports = {
       }
 
       const updatedBatch = await batch.findByPk(idBatch);
+      const responseData = updatedBatch.toJSON();
+      
+      // Ensure scoring_config is an object
+      if (typeof responseData.scoring_config === 'string') {
+        try {
+          responseData.scoring_config = JSON.parse(responseData.scoring_config);
+        } catch (e) {
+          responseData.scoring_config = {};
+        }
+      }
+
       return res.status(200).json({
         status: true,
-        data: updatedBatch
+        data: responseData
       });
     } catch (error) {
       return res.status(500).json({

@@ -1,6 +1,31 @@
 LATEST UPDATES - 01 Maret 2026
 ==============================
 
+1. PERBAIKAN ROBUST: PENYIMPANAN & DISPLAY RAW SCORING (INITIAL SCORE)
+   - Memperbaiki issue di mana `initialScore` (Nilai Awal) tidak tersimpan atau tampil sebagai 0 saat edit batch.
+   - Implementasi robust JSON parsing di `batchController.js`: mendeteksi jika `scoring_config` diterima sebagai string dari client dan melakukan `JSON.parse` sebelum pemrosesan.
+   - Penambahan safeguards pada semua respon API (`createBatch`, `updateBatch`, `getBatchById`, `getAllBatches`) untuk memastikan `scoring_config` selalu dikirim sebagai objek JSON meskipun database mengembalikannya sebagai string.
+   - Memperbaiki bug kalkulasi pada `resultService.js` dengan explicit casting `Number()` untuk mencegah *string concatenation*.
+   - File yang disentuh:
+     - node-be/controllers/batchController.js
+     - node-be/services/resultService.js
+     - node-be/tests/scoringFix.test.js
+
+2. FIX RUNTIME ERROR: MISSING NIM (DETAILUSER) DI LIST PESERTA
+   - Memperbaiki error `Cannot read properties of null (reading 'nim')` di halaman Admin Peserta.
+   - Penyebab: Optimasi "Separate Query" sebelumnya tidak menyertakan data `detailuser` saat mengambil informasi user secara terpisah.
+   - Solusi: Menambahkan `include: detailuser` pada semua query user terpisah di berbagai controller.
+   - File yang disentuh:
+     - node-be/controllers/batchController.js
+     - node-be/controllers/paymentController.js
+     - node-be/controllers/logController.js
+     - node-be/controllers/adminStatsController.js
+
+Timestamp: 2026-03-01 17:15:00
+
+LATEST UPDATES - 01 Maret 2026
+==============================
+
 1. HOTFIX: PERBAIKAN BATCH & PAYMENT LIST KOSONG (COLLATION ERROR)
    - Error "Illegal mix of collations" merembet ke halaman Batch dan Payment karena adanya `JOIN` ke tabel `users`.
    - Hal ini menyebabkan respon API `GET /batch` menjadi kosong `[]` di production.

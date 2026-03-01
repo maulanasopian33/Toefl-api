@@ -108,10 +108,18 @@ module.exports = {
       if (type) where.type = type;
 
       logger.info(`Fetching batches with query: ${JSON.stringify(where)}`);
-      logger.info(`type: ${type}`);
-      logger.info(`status: ${status}`);
-
-      // Step 1: Ambil data batch saja dahulu tanpa JOIN ke sessions
+      logger.info(`DB_NAME env: ${process.env.DB_NAME || 'not set'}`);
+      
+      // DEBUG: Raw query to verify table existence and content
+      try {
+        const rawTables = await sequelize.query("SHOW TABLES", { type: sequelize.QueryTypes.SELECT });
+        logger.info(`Tables in DB: ${JSON.stringify(rawTables)}`);
+        
+        const rawCount = await sequelize.query("SELECT COUNT(*) as total FROM batches", { type: sequelize.QueryTypes.SELECT });
+        logger.info(`Raw count from 'batches' table: ${JSON.stringify(rawCount)}`);
+      } catch (err) {
+        logger.error(`Debug Raw Query Error: ${err.message}`);
+      }
       // untuk mendiagnosa apakah masalah ada di JOIN atau di query batch-nya sendiri
       const batchesData = await batch.findAll({
         where,

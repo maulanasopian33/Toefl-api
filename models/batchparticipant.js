@@ -16,8 +16,18 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   batchparticipant.init({
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+      allowNull: false
+    },
     batchId: DataTypes.STRING,
-    userId: DataTypes.STRING
+    userId: DataTypes.STRING,
+    status: {
+      type: DataTypes.ENUM('pending', 'active', 'cancelled'),
+      defaultValue: 'pending'
+    }
   }, {
     sequelize,
     modelName: 'batchparticipant',

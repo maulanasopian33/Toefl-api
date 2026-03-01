@@ -67,6 +67,7 @@ module.exports = (sequelize, DataTypes) => {
   }, {
     sequelize,
     modelName: 'batch',
+    paranoid: true, // Enable soft deletes
     hooks: {
       afterCreate: (instance, options) => {
         logger.info({

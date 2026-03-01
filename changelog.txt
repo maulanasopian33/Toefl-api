@@ -16,6 +16,32 @@ Timestamp: 2026-03-01 12:40:00
 LATEST UPDATES - 01 Maret 2026
 ==============================
 
+1. REFACTORED BATCH & PAYMENT CONTROLLERS (COLLATION HOTFIX)
+   - Mengubah `getAllBatches`, `getBatchById`, `createBatch`, dan `getAllPayments` untuk mengambil data User secara terpisah.
+   - Solusi ini menghindari error "Illegal mix of collations" saat melakukan JOIN antar tabel yang berbeda kolasi di production.
+   - File: `controllers/batchController.js`, `controllers/paymentController.js`
+
+2. IMPLEMENTASI BATCH DELETION SAFETY (DATA PROTECTION)
+   - Menambahkan guard di `deleteBatch`: Penolakan penghapusan jika batch sudah memiliki peserta.
+   - Mengaktifkan Soft Delete (Paranoid) pada model `Batch` untuk mencegah kehilangan data permanen.
+   - Menambahkan kolom `deletedAt` pada tabel `batches`.
+   - File: `controllers/batchController.js`, `models/batch.js`, `migrations/20260301062647-add-deleted-at-to-batches.js`
+
+3. FRONTEND DELETION CONFIRMATION & ERROR HANDLING
+   - Menambahkan dialog konfirmasi yang lebih jelas sebelum menghapus batch.
+   - Menampilkan pesan error spesifik dari backend jika penghapusan ditolak (misal: karena ada peserta).
+   - File: `nuxt-fe/pages/admin/batch/index.vue`
+
+4. AUDIT LOG SYSTEM ENHANCEMENT
+   - Memperbaiki `getAuditLogs` untuk mendukung pagination dan pencarian user tanpa JOIN.
+   - Memperbaiki skema Joi untuk mendukung logger dari frontend.
+   - File: `controllers/logController.js`
+
+Timestamp: 2026-03-01 13:35:00
+
+LATEST UPDATES - 01 Maret 2026
+==============================
+
 1. HOTFIX: COLLATION ERROR TANPA MIGRASI (IMMEDIATE FIX)
    - Error masih terjadi di production karena migration belum bisa dijalankan.
    - Solusi: Mengubah logika `getAuditLogs` di `logController.js` agar TIDAK menggunakan JOIN ke tabel `users`.

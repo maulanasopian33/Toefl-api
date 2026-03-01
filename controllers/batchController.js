@@ -107,32 +107,16 @@ module.exports = {
       if (status) where.status = status;
       if (type) where.type = type;
 
-      logger.info(`Fetching batches with query: ${JSON.stringify(where)}`);
-      logger.info(`DB_NAME env: ${process.env.DB_NAME || 'not set'}`);
-      
-      // DEBUG: Raw query to verify table existence and content
-      try {
-        const rawTables = await sequelize.query("SHOW TABLES", { type: sequelize.QueryTypes.SELECT });
-        logger.info(`Tables in DB: ${JSON.stringify(rawTables)}`);
-        
-        const rawCount = await sequelize.query("SELECT COUNT(*) as total FROM batches", { type: sequelize.QueryTypes.SELECT });
-        logger.info(`Raw count from 'batches' table: ${JSON.stringify(rawCount)}`);
-      } catch (err) {
-        logger.error(`Debug Raw Query Error: ${err.message}`);
-      }
-      // untuk mendiagnosa apakah masalah ada di JOIN atau di query batch-nya sendiri
+      // Step 1: Ambil data batch (serta sesi) tanpa JOIN ke tabel ‘user’ langsung
+      // Ini menghindari error ‘Illegal mix of collations’ jika ada perbedaan kolasi
       const batchesData = await batch.findAll({
         where,
-        // include: [
-        //   { model: batchsession, as: 'sessions' }
-        // ],
+        include: [
+          { model: batchsession, as: 'sessions' }
+        ],
         order: [['createdAt', 'DESC']]
       });
-      
-      logger.info(`batchesData length: ${batchesData.length}`);
-      if (batchesData.length > 0) {
-        logger.info(`First batch ID: ${batchesData[0].idBatch}`);
-      }
+
       // Jika data kosong, langsung kembalikan
       if (batchesData.length === 0) {
         return res.status(200).json({
@@ -141,12 +125,11 @@ module.exports = {
         });
       }
 
-      // Step 2: Ambil semua ID pembuat (created_by) secara unik
+      // Ambil semua ID pembuat (created_by) secara unik
       const creatorIds = [...new Set(batchesData.map(b => b.created_by).filter(Boolean))];
 
       let creatorMap = {};
       if (creatorIds.length > 0) {
-        // Ambil data user secara terpisah
         const creators = await user.findAll({
           where: { uid: creatorIds },
           attributes: ['uid', 'name']
@@ -156,7 +139,7 @@ module.exports = {
         });
       }
 
-      // Step 3: Gabungkan data creator kembali ke masing-masing batch
+      // Gabungkan data creator kembali ke masing-masing batch
       const result = batchesData.map(b => {
         const item = b.toJSON();
         item.creator = creatorMap[item.created_by] || null;
@@ -370,6 +353,16 @@ module.exports = {
   deleteBatch: async (req, res) => {
     try {
       const { idBatch } = req.params;
+
+      // 1. Guard: Cek apakah sudah ada peserta
+      const participantCount = await batchparticipant.count({ where: { batchId: idBatch } });
+      if (participantCount > 0) {
+        return res.status(400).json({
+          status: false,
+          message: `Tidak dapat menghapus batch yang sudah memiliki ${participantCount} peserta.`
+        });
+      }
+
       const deleted = await batch.destroy({
         where: { idBatch }
       });
@@ -377,18 +370,18 @@ module.exports = {
       if (!deleted) {
         return res.status(404).json({
           status: false,
-          message: 'Batch not found'
+          message: 'Batch tidak ditemukan'
         });
       }
 
       return res.status(200).json({
         status: true,
-        message: 'Batch deleted successfully'
+        message: 'Batch berhasil dihapus'
       });
     } catch (error) {
       return res.status(500).json({
         status: false,
-        message: 'Failed to delete batch',
+        message: 'Gagal menghapus batch',
         error: error.message
       });
     }

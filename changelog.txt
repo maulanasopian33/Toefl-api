@@ -27,17 +27,23 @@ LATEST UPDATES - 01 Maret 2026
    - Menambahkan kolom `deletedAt` pada tabel `batches`.
    - File: `controllers/batchController.js`, `models/batch.js`, `migrations/20260301062647-add-deleted-at-to-batches.js`
 
-3. FRONTEND DELETION CONFIRMATION & ERROR HANDLING
+3. FITUR PENGELOLAAN PESERTA & AUTO-PAID BATCH
+   - Implementasi fitur Hapus Peserta dari batch (termasuk hapus tagihan pending).
+   - Penambahan opsi "Auto Lunas (Auto Paid)" pada pengaturan batch.
+   - Peserta yang join ke batch Auto-Paid akan otomatis berstatus 'Paid' tanpa perlu approval manual.
+   - File: `controllers/batchParticipantController.js`, `routes/batchParticipant.js`, `nuxt-fe/components/batch/tabs/ParticipantsTab.vue`, `nuxt-fe/composables/BatchParticipant/delete.ts`
+
+4. FRONTEND DELETION CONFIRMATION & ERROR HANDLING
    - Menambahkan dialog konfirmasi yang lebih jelas sebelum menghapus batch.
    - Menampilkan pesan error spesifik dari backend jika penghapusan ditolak (misal: karena ada peserta).
    - File: `nuxt-fe/pages/admin/batch/index.vue`
 
-4. AUDIT LOG SYSTEM ENHANCEMENT
+5. AUDIT LOG SYSTEM ENHANCEMENT
    - Memperbaiki `getAuditLogs` untuk mendukung pagination dan pencarian user tanpa JOIN.
    - Memperbaiki skema Joi untuk mendukung logger dari frontend.
    - File: `controllers/logController.js`
 
-Timestamp: 2026-03-01 13:35:00
+Timestamp: 2026-03-01 14:05:00
 
 LATEST UPDATES - 01 Maret 2026
 ==============================

@@ -63,6 +63,10 @@ module.exports = (sequelize, DataTypes) => {
     scoring_config: {
       type: DataTypes.JSON,
       comment: 'Configuration for scoring, e.g., initial value for RAW type'
+    },
+    is_auto_paid: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
     }
   }, {
     sequelize,

@@ -75,27 +75,30 @@ module.exports = {
          return res.status(400).json({ status: false, message: 'Already joined this batch' });
       }
 
-      // Buat participant
+      // 4. Buat participant (Default status 'pending' unless auto-paid)
       const participant = await db.batchparticipant.create({
         id: uuidv4(),
         batchId,
         userId,
+        status: batch.is_auto_paid ? 'active' : 'pending' // Asumsi ada field status di participant
       }, { user: req.user, transaction: t });
 
-      // Cek apakah sudah ada pembayaran untuk participant ini
+      // 5. Cek apakah sudah ada pembayaran untuk participant ini
       let payment = await db.payment.findOne({ where: { participantId: participant.id }, transaction: t });
 
       if (!payment) {
         const newInvoiceNumber = await generateInvoiceNumber();
 
         // Jika belum ada, buat pembayaran baru
+        // Jika is_auto_paid = true, status langsung 'paid'
         payment = await db.payment.create({
           id: uuidv4(),
           invoiceNumber: newInvoiceNumber,
           participantId: participant.id,
           amount: batch.price,
-          status: 'pending',
-          method: 'manual', // default, nanti bisa diupdate
+          status: batch.is_auto_paid ? 'paid' : 'pending',
+          method: batch.is_auto_paid ? 'auto' : 'manual',
+          paidAt: batch.is_auto_paid ? new Date() : null
         }, { transaction: t });
       } else {
         // Jika sudah ada, kirim pesan bahwa pembayaran sudah ada
@@ -125,6 +128,7 @@ module.exports = {
         include: [
           { model: db.payment, as: 'payments' },
           { model: db.batch, as: 'batch' },
+          { model: db.user, as: 'user' }
         ],
       });
       res.json({
@@ -136,4 +140,38 @@ module.exports = {
       next(error);
     }
   },
+
+  async removeParticipant(req, res, next) {
+    const t = await sequelize.transaction();
+    try {
+      const { id } = req.params; // ID participant
+
+      // 1. Cari participant
+      const participant = await db.batchparticipant.findByPk(id, { transaction: t });
+      if (!participant) {
+        await t.rollback();
+        return res.status(404).json({ status: false, message: 'Participant tidak ditemukan.' });
+      }
+
+      // 2. Hapus data terkait (seperti pembayaran yang masih pending)
+      // Jika pembayaran sudah 'paid', mungkin ingin divalidasi dulu atau dibiarkan sebagai riwayat?
+      // Untuk keamanan pendaftaran, kita hapus pembayarannya juga.
+      await db.payment.destroy({
+        where: { participantId: id },
+        transaction: t
+      });
+
+      // 3. Hapus participant
+      await participant.destroy({ transaction: t });
+
+      await t.commit();
+      res.json({
+        status: true,
+        message: 'Peserta berhasil dihapus dari batch.'
+      });
+    } catch (error) {
+      if (t) await t.rollback();
+      next(error);
+    }
+  }
 };

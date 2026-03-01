@@ -10,6 +10,8 @@ const LOG_DIR = path.join(__dirname, '../logs');
 const auditLogSchema = Joi.object({
   action: Joi.string().required(),
   module: Joi.string().required(),
+  message: Joi.string().optional(),
+  level: Joi.string().optional(),
   details: Joi.object().optional(),
   source: Joi.string().valid('backend', 'frontend').optional()
 });
@@ -55,23 +57,43 @@ exports.getAuditLogs = async (req, res, next) => {
       where.createdAt = { [Op.between]: [new Date(startDate), new Date(endDate)] };
     }
 
-    const { count, rows } = await auditlog.findAndCountAll({
+    // Step 1: Ambil audit logs TANPA JOIN ke tabel users
+    // (menghindari error collation mismatch antar tabel)
+    const count = await auditlog.count({ where });
+    const rows = await auditlog.findAll({
       where,
       limit: parseInt(limit),
       offset: parseInt(offset),
-      order: [['createdAt', 'DESC']],
-      include: [
-        { model: require('../models').user, as: 'user', attributes: ['name', 'email'] }
-      ]
+      order: [['createdAt', 'DESC']]
+      // Tidak gunakan include/JOIN — collation tabel users berbeda di production
     });
+
+    // Step 2: Ambil data user secara terpisah menggunakan userId yang sudah ada
+    const { user } = require('../models');
+    const userIds = [...new Set(rows.map(r => r.userId).filter(Boolean))];
+    
+    let userMap = {};
+    if (userIds.length > 0) {
+      const users = await user.findAll({
+        where: { uid: userIds },
+        attributes: ['uid', 'name', 'email']
+      });
+      users.forEach(u => { userMap[u.uid] = u; });
+    }
+
+    // Step 3: Gabungkan data
+    const logs = rows.map(log => ({
+      ...log.toJSON(),
+      user: userMap[log.userId] || null
+    }));
 
     res.status(200).json({
       status: true,
       data: {
         totalItems: count,
-        totalPages: Math.ceil(count / limit),
+        totalPages: Math.ceil(count / parseInt(limit)),
         currentPage: parseInt(page),
-        logs: rows
+        logs
       }
     });
   } catch (error) {

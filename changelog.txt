@@ -1,6 +1,20 @@
 LATEST UPDATES - 01 Maret 2026
 ==============================
 
+1. HOTFIX: COLLATION ERROR TANPA MIGRASI (IMMEDIATE FIX)
+   - Error masih terjadi di production karena migration belum bisa dijalankan.
+   - Solusi: Mengubah logika `getAuditLogs` di `logController.js` agar TIDAK menggunakan JOIN ke tabel `users`.
+   - Diganti dengan dua query terpisah: (1) ambil audit logs, (2) ambil data user berdasarkan userId.
+   - Hasilnya digabungkan di application layer, bukan di MySQL JOIN.
+   - Cara ini menghilangkan error "Illegal mix of collations" tanpa perlu mengubah database.
+   - File yang disentuh:
+     - node-be/controllers/logController.js
+
+Timestamp: 2026-03-01 12:29:00
+
+LATEST UPDATES - 01 Maret 2026
+==============================
+
 1. PERBAIKAN COLLATION MISMATCH (ERROR ILLEGAL MIX OF COLLATIONS)
    - Error: "Illegal mix of collations (utf8mb4_general_ci,IMPLICIT) and (utf8mb4_unicode_ci,IMPLICIT) for operation '='".
    - Root cause: Tabel `audit_logs` di server production dibuat dengan collation default MySQL (utf8mb4_unicode_ci), berbeda dengan tabel `users` yang menggunakan utf8mb4_general_ci.

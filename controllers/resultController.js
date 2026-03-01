@@ -491,13 +491,13 @@ exports.deleteResult = async (req, res, next) => {
   const transaction = await db.sequelize.transaction();
   try {
     const { resultId } = req.params;
-    const numericId = resultId.startsWith('res-') ? resultId.substring(4) : resultId;
+    const historyId = resultId.startsWith('res-') ? resultId.substring(4) : resultId;
 
-    if (isNaN(numericId)) {
+    if (!historyId) {
       return res.status(400).json({ message: 'Format ID tidak valid.' });
     }
 
-    const userResult = await db.userresult.findByPk(numericId);
+    const userResult = await db.userresult.findByPk(historyId);
     if (!userResult) {
       await transaction.rollback();
       return res.status(404).json({ message: 'Hasil tes tidak ditemukan.' });
@@ -505,7 +505,7 @@ exports.deleteResult = async (req, res, next) => {
 
     // 1. Hapus semua jawaban terkait
     await db.useranswer.destroy({
-      where: { userResultId: numericId },
+      where: { userResultId: historyId },
       transaction
     });
 
@@ -514,7 +514,7 @@ exports.deleteResult = async (req, res, next) => {
 
     await transaction.commit();
 
-    logger.info(`Result deleted: ID ${numericId}, User ${userResult.userId}, Batch ${userResult.batchId}`);
+    logger.info(`Result deleted: ID ${historyId}, User ${userResult.userId}, Batch ${userResult.batchId}`);
     
     res.status(200).json({ 
       success: true, 

@@ -45,7 +45,13 @@ LATEST UPDATES - 01 Maret 2026
      - nuxt-fe/composables/useAdminResults.ts
      - nuxt-fe/pages/admin/results/batch/index.vue
 
-Timestamp: 2026-03-01 19:20:00
+6. PERBAIKAN ERROR 404 PADA DETAIL RIWAYAT TES
+   - Memperbaiki kesalahan ekstrak ID pada `examController.getTestResult` (perubahan `split('_')` menjadi `split('-')`).
+   - Menyempurnakan filter jawaban peserta agar menggunakan `userResultId` untuk mendukung fitur multi-attempt secara akurat.
+   - File yang disentuh:
+     - node-be/controllers/examController.js
+
+Timestamp: 2026-03-01 19:45:00
 
 LATEST UPDATES - 01 Maret 2026
 ==============================

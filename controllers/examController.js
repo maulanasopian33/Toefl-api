@@ -491,8 +491,8 @@ exports.getTestResult = async (req, res, next) => {
     const { historyId: rawHistoryId } = req.params;
     const { uid } = req.user; 
 
-    // Ekstrak ID numerik
-    const historyId = rawHistoryId.split('_').pop();
+    // Ekstrak ID numerik (Format: hist-5)
+    const historyId = rawHistoryId.split('-').pop();
 
     // 1. Ambil hasil tes utama
     const userResult = await db.userresult.findOne({
@@ -520,7 +520,7 @@ exports.getTestResult = async (req, res, next) => {
 
     // 3. Ambil detail jawaban untuk tampilan review
     const userAnswers = await db.useranswer.findAll({
-      where: { userId: uid, batchId: userResult.batchId },
+      where: { userResultId: historyId },
       include: [
         {
           model: db.question, as: 'question', attributes: ['idQuestion', 'text'],

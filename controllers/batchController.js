@@ -107,20 +107,24 @@ module.exports = {
       if (status) where.status = status;
       if (type) where.type = type;
 
-      logger.info('Fetching batches with query:', where);
-      logger.info('type', type);
-      logger.info('status', status);
-      // Step 1: Ambil data batch (serta sesi) tanpa JOIN ke tabel ‘user’ langsung
-      // Ini menghindari error ‘Illegal mix of collations’ jika ada perbedaan kolasi
+      logger.info(`Fetching batches with query: ${JSON.stringify(where)}`);
+      logger.info(`type: ${type}`);
+      logger.info(`status: ${status}`);
+
+      // Step 1: Ambil data batch saja dahulu tanpa JOIN ke sessions
+      // untuk mendiagnosa apakah masalah ada di JOIN atau di query batch-nya sendiri
       const batchesData = await batch.findAll({
         where,
-        include: [
-          { model: batchsession, as: 'sessions' }
-        ],
+        // include: [
+        //   { model: batchsession, as: 'sessions' }
+        // ],
         order: [['createdAt', 'DESC']]
       });
       
-      logger.info('batchesData', batchesData);
+      logger.info(`batchesData length: ${batchesData.length}`);
+      if (batchesData.length > 0) {
+        logger.info(`First batch ID: ${batchesData[0].idBatch}`);
+      }
       // Jika data kosong, langsung kembalikan
       if (batchesData.length === 0) {
         return res.status(200).json({

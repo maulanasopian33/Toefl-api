@@ -21,7 +21,21 @@ LATEST UPDATES - 01 Maret 2026
      - node-be/controllers/logController.js
      - node-be/controllers/adminStatsController.js
 
-Timestamp: 2026-03-01 17:15:00
+3. PERBAIKAN KALKULASI RAW SCORING (MISSING INITIAL SCORE)
+   - Memperbaiki issue di mana `initialScore` tidak ditambahkan ke total score pada metode RAW.
+   - Penyebab: Data `scoring_config` terkadang dikembalikan sebagai string oleh database, sehingga `config.initialScore` menjadi `undefined`.
+   - Solusi: Menambahkan parsing JSON yang robust pada `resultService.js` untuk memastikan data terbaca dengan benar.
+   - File yang disentuh:
+     - node-be/services/resultService.js
+
+4. FITUR HITUNG ULANG SCORE PER BATCH
+   - Menambahkan tombol "Hitung Ulang Skor" di halaman Admin Hasil Tes per Batch.
+   - Memungkinkan Admin untuk sinkronisasi nilai seluruh peserta jika ada perubahan sistem penilaian.
+   - Perubahan teknis:
+     - Backend: Endpoint `POST /results/recalculate-batch`.
+     - Frontend: Composable `useRecalculateBatch` dan update pada `index.vue`.
+
+Timestamp: 2026-03-01 18:00:00
 
 LATEST UPDATES - 01 Maret 2026
 ==============================

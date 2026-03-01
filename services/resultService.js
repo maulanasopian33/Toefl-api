@@ -111,7 +111,14 @@ async function calculateUserResult(userId, batchId, resultId = null) {
     const batchInfo = await batch.findByPk(batchId);
     if (!batchInfo) throw new Error(`Batch ${batchId} tidak ditemukan`);
 
-    const config = batchInfo.scoring_config || {};
+    let config = batchInfo.scoring_config || {};
+    if (typeof config === 'string') {
+      try {
+        config = JSON.parse(config);
+      } catch (e) {
+        config = {};
+      }
+    }
     const multiplier = config.multiplier || 10;
     const divisor = config.divisor || 3;
 
@@ -213,6 +220,14 @@ async function calculateUserResult(userId, batchId, resultId = null) {
  */
 async function getSectionScores(userId, batchId, scoringType, scoringConfig = {}) {
   try {
+    let config = scoringConfig;
+    if (typeof config === 'string') {
+      try {
+        config = JSON.parse(config);
+      } catch (e) {
+        config = {};
+      }
+    }
     const stats = await _getInternalSectionStats(userId, batchId);
     const { sectionMap } = stats;
 

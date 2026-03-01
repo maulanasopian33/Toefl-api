@@ -425,3 +425,60 @@ exports.getCandidates = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Menghitung ulang semua hasil tes untuk satu batch (Admin).
+ * Route: POST /results/recalculate-batch
+ */
+exports.recalculateBatch = async (req, res, next) => {
+  try {
+    const { batchId } = req.body;
+    if (!batchId) {
+      return res.status(400).json({ message: 'batchId wajib diisi' });
+    }
+
+    // 1. Ambil semua userId unik yang pernah mengerjakan batch ini
+    const results = await db.userresult.findAll({
+      where: { batchId },
+      attributes: [[db.sequelize.fn('DISTINCT', db.sequelize.col('userId')), 'userId']]
+    });
+
+    if (!results || results.length === 0) {
+      return res.status(404).json({ message: `Tidak ada hasil tes ditemukan untuk batch ID ${batchId}.` });
+    }
+
+    const userIds = results.map(r => r.userId);
+    const totalProcessed = userIds.length;
+
+    // 2. Jalankan perhitungan ulang untuk setiap user
+    // Kita jalankan secara gradual atau Promise.all depending on load
+    // Karena ini admin action, kita coba Promise.all tapi capture error per unit
+    const summary = {
+      success: 0,
+      failed: 0,
+      errors: []
+    };
+
+    await Promise.all(userIds.map(async (userId) => {
+      try {
+        await calculateUserResult(userId, batchId);
+        summary.success++;
+      } catch (err) {
+        summary.failed++;
+        summary.errors.push({ userId, error: err.message });
+        logger.error(`Recalculate Batch Error for User ${userId}: ${err.message}`);
+      }
+    }));
+
+    res.status(200).json({
+      message: `Proses hitung ulang selesai untuk batch ${batchId}.`,
+      summary: {
+        total_participants: totalProcessed,
+        ...summary
+      }
+    });
+  } catch (error) {
+    logger.error(`recalculateBatch Error: ${error.message}`, { batchId: req.body.batchId });
+    next(error);
+  }
+};

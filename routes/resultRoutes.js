@@ -15,5 +15,8 @@ router.get('/user/:userId/batch/:batchId', checkAuth, checkPermission('result.vi
 // GET /results/answers/:attemptId - Mendapatkan detail jawaban per percobaan tes (hanya admin)
 router.get('/answers/:attemptId', checkAuth, checkPermission('result.view_all'), resultController.getAnswersByAttemptId);
 
+// POST /results/recalculate-batch - Hitung ulang semua skor dalam satu batch (admin only)
+router.post('/recalculate-batch', checkAuth, checkPermission('result.view_all'), resultController.recalculateBatch);
+
 
 module.exports = router;

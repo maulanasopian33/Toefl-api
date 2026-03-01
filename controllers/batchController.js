@@ -1,6 +1,7 @@
 const { batch, batchsession, user, sequelize, batchparticipant, payment, section, group, question } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
+const { logger } = require('../utils/logger');
 
 module.exports = {
   createBatch: async (req, res) => {
@@ -106,6 +107,9 @@ module.exports = {
       if (status) where.status = status;
       if (type) where.type = type;
 
+      logger.info('Fetching batches with query:', where);
+      logger.info('type', type);
+      logger.info('status', status);
       // Step 1: Ambil data batch (serta sesi) tanpa JOIN ke tabel ‘user’ langsung
       // Ini menghindari error ‘Illegal mix of collations’ jika ada perbedaan kolasi
       const batchesData = await batch.findAll({
@@ -115,7 +119,8 @@ module.exports = {
         ],
         order: [['createdAt', 'DESC']]
       });
-
+      
+      logger.info('batchesData', batchesData);
       // Jika data kosong, langsung kembalikan
       if (batchesData.length === 0) {
         return res.status(200).json({

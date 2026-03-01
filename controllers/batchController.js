@@ -63,12 +63,25 @@ module.exports = {
       await transaction.commit();
 
       // Fetch the created batch with sessions to return
+      // Use separate query for creator to avoid collation issues
       const result = await batch.findByPk(idBatch, {
         include: [
-          { model: batchsession, as: 'sessions' },
-          { model: user, as: 'creator', attributes: ['uid', 'name', 'email'] }
+          { model: batchsession, as: 'sessions' }
         ]
       });
+
+      if (result) {
+        const creator = await user.findByPk(result.created_by, {
+          attributes: ['uid', 'name', 'email']
+        });
+        const responseData = result.toJSON();
+        responseData.creator = creator;
+        
+        return res.status(201).json({
+          status: true,
+          data: responseData
+        });
+      }
 
       return res.status(201).json({
         status: true,
@@ -93,18 +106,49 @@ module.exports = {
       if (status) where.status = status;
       if (type) where.type = type;
 
-      const batches = await batch.findAll({
+      // Step 1: Ambil data batch (serta sesi) tanpa JOIN ke tabel ‘user’ langsung
+      // Ini menghindari error ‘Illegal mix of collations’ jika ada perbedaan kolasi
+      const batchesData = await batch.findAll({
         where,
         include: [
-          { model: batchsession, as: 'sessions' },
-          { model: user, as: 'creator', attributes: ['uid', 'name'] }
+          { model: batchsession, as: 'sessions' }
         ],
         order: [['createdAt', 'DESC']]
       });
 
+      // Jika data kosong, langsung kembalikan
+      if (batchesData.length === 0) {
+        return res.status(200).json({
+          status: true,
+          data: []
+        });
+      }
+
+      // Step 2: Ambil semua ID pembuat (created_by) secara unik
+      const creatorIds = [...new Set(batchesData.map(b => b.created_by).filter(Boolean))];
+
+      let creatorMap = {};
+      if (creatorIds.length > 0) {
+        // Ambil data user secara terpisah
+        const creators = await user.findAll({
+          where: { uid: creatorIds },
+          attributes: ['uid', 'name']
+        });
+        creators.forEach(c => {
+          creatorMap[c.uid] = { uid: c.uid, name: c.name };
+        });
+      }
+
+      // Step 3: Gabungkan data creator kembali ke masing-masing batch
+      const result = batchesData.map(b => {
+        const item = b.toJSON();
+        item.creator = creatorMap[item.created_by] || null;
+        return item;
+      });
+
       return res.status(200).json({
         status: true,
-        data: batches
+        data: result
       });
     } catch (error) {
       console.error('Error fetching batches:', error);
@@ -119,16 +163,17 @@ module.exports = {
   getBatchById: async (req, res) => {
     try {
       const { idBatch } = req.params;
+      
+      // Step 1: Ambil data batch, sessions, participants, sections, groups, questions
+      // Tanpa JOIN ke tabel 'users'
       const data = await batch.findByPk(idBatch, {
         include: [
           { model: batchsession, as: 'sessions' },
-          { model: user, as: 'creator', attributes: ['uid', 'name', 'email'] },
           {
             model: batchparticipant,
             as: "participants",
             include: [
-              { model: user, as: "user", attributes: ['name', 'email', 'picture'] },
-              { model: payment, as: 'payments' }, // Tambahkan ini untuk menyertakan data pembayaran
+              { model: payment, as: 'payments' },
             ]
           },
           {
@@ -146,7 +191,6 @@ module.exports = {
         ]
       });
 
-
       if (!data) {
         return res.status(404).json({
           status: false,
@@ -154,13 +198,32 @@ module.exports = {
         });
       }
 
-      // Explicit safety check
-      if (data === null || data === undefined) {
-        console.error('[CRITICAL] Data is null after check!');
-        return res.status(500).json({ status: false, message: 'Internal Server Error: Data inconsistency' });
+      // Step 2: Ambil semua User ID yang terlibat (creator dan participants)
+      const participantUserIds = (data.participants || []).map(p => p.userId).filter(Boolean);
+      const allUserIds = [...new Set([data.created_by, ...participantUserIds].filter(Boolean))];
+
+      let userMap = {};
+      if (allUserIds.length > 0) {
+        const users = await user.findAll({
+          where: { uid: allUserIds },
+          attributes: ['uid', 'name', 'email', 'picture']
+        });
+        users.forEach(u => { userMap[u.uid] = u; });
       }
 
+      // Step 3: Map kembali data user ke objek data
       const responseData = data.toJSON();
+      
+      // Pasang creator
+      responseData.creator = userMap[responseData.created_by] || null;
+      
+      // Pasang user ke masing-masing participant
+      if (responseData.participants) {
+        responseData.participants = responseData.participants.map(p => ({
+          ...p,
+          user: userMap[p.userId] || null
+        }));
+      }
 
       // Hitung total pembayaran berdasarkan status
       let totalPaid = 0;

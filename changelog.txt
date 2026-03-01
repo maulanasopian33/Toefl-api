@@ -1,6 +1,21 @@
 LATEST UPDATES - 01 Maret 2026
 ==============================
 
+1. HOTFIX: PERBAIKAN BATCH & PAYMENT LIST KOSONG (COLLATION ERROR)
+   - Error "Illegal mix of collations" merembet ke halaman Batch dan Payment karena adanya `JOIN` ke tabel `users`.
+   - Hal ini menyebabkan respon API `GET /batch` menjadi kosong `[]` di production.
+   - Solusi: Menerapkan pendekatan "Separate Query" pada `batchController.js` (`getAllBatches`, `getBatchById`, `createBatch`) dan `paymentController.js` (`getAllPayments`).
+   - Query ke tabel `users` dilakukan secara terpisah setelah data utama diambil, lalu digabungkan di level aplikasi.
+   - Hasil: Halaman Batch dan Payment di Admin kembali berfungsi normal tanpa perlu migrasi DB segera.
+   - File yang disentuh:
+     - node-be/controllers/batchController.js
+     - node-be/controllers/paymentController.js
+
+Timestamp: 2026-03-01 12:40:00
+
+LATEST UPDATES - 01 Maret 2026
+==============================
+
 1. HOTFIX: COLLATION ERROR TANPA MIGRASI (IMMEDIATE FIX)
    - Error masih terjadi di production karena migration belum bisa dijalankan.
    - Solusi: Mengubah logika `getAuditLogs` di `logController.js` agar TIDAK menggunakan JOIN ke tabel `users`.

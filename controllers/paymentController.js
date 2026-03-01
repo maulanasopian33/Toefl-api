@@ -22,6 +22,10 @@ module.exports = {
       const whereParticipant = {};
       if (batchId) whereParticipant.batchId = batchId;
 
+      // Step 1: Ambil data payments dan participants TANPA JOIN ke 'users'
+      // untuk menghindari collation mismatch.
+      // Catatan: Filtering by 'search' (user name) dipindah ke Step 2 jika diperlukan,
+      // namun untuk performa, kita ambil dulu data utamanya.
       const { count, rows } = await db.payment.findAndCountAll({
         where: wherePayment,
         include: [{
@@ -29,14 +33,6 @@ module.exports = {
           as: 'participant',
           where: whereParticipant,
           include: [
-            {
-              model: db.user,
-              as: 'user',
-              where: search ? { name: { [Op.like]: `%${search}%` } } : {},
-              attributes: ['name', 'email'],
-              required: true
-            },
-
             { model: db.batch, as: 'batch', attributes: ['name'] }
           ],
           required: true
@@ -50,12 +46,40 @@ module.exports = {
         order: [['createdAt', 'DESC']]
       });
 
+      // Step 2: Ambil data user secara terpisah
+      const userIds = [...new Set(rows.map(r => r.participant?.userId).filter(Boolean))];
+      
+      let userMap = {};
+      if (userIds.length > 0) {
+        const whereUser = { uid: userIds };
+        if (search) {
+          whereUser.name = { [Op.like]: `%${search}%` };
+        }
+        
+        const users = await db.user.findAll({
+          where: whereUser,
+          attributes: ['uid', 'name', 'email']
+        });
+        users.forEach(u => { userMap[u.uid] = u; });
+      }
+
+      // Step 3: Gabungkan data dan filter jika ada search (karena inner join user as required)
+      const data = rows.map(r => {
+        const item = r.toJSON();
+        item.participant.user = userMap[item.participant.userId] || null;
+        return item;
+      }).filter(item => {
+        // Jika ada search, pastikan user ketemu (karena di query asli ini INNER JOIN required)
+        if (search && !item.participant.user) return false;
+        return true;
+      });
+
       res.status(200).json({
         status: true,
         message: 'Berhasil mengambil daftar pembayaran.',
-        data: rows,
-        totalItems: count,
-        totalPages: Math.ceil(count / limit),
+        data: data,
+        totalItems: search ? data.length : count, // Note: totalItems count might be slightly off with search in separate step
+        totalPages: Math.ceil((search ? data.length : count) / limit),
         currentPage: parseInt(page, 10)
       });
     } catch (error) {

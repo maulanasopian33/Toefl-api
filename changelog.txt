@@ -1,3 +1,37 @@
+LATEST UPDATES - 01 Maret 2026
+==============================
+
+1. PERBAIKAN MIGRASI AUDIT_LOGS (ERRNO 150 FOREIGN KEY)
+   - Menghapus FK constraint pada kolom `userId` di migrasi `audit_logs` yang menyebabkan error "errno: 150 Foreign key constraint incorrectly formed".
+   - Root cause: tabel `users` menggunakan Firebase UID (STRING) sebagai Primary Key, sehingga tidak bisa digunakan sebagai referensi FK standar MySQL.
+   - Relasi kini dijaga secara logis di level model Sequelize (soft reference), bukan di level DB constraint.
+   - File yang disentuh:
+     - node-be/migrations/20260227110000-create-audit-log.js
+     - node-be/tests/migrationSync.test.js (update assertion)
+
+2. PENINGKATAN AUDIT LOG — SEMUA STATUS CODE TERCATAT
+   - Audit middleware sebelumnya hanya mencatat aksi yang berhasil (status 2xx).
+   - Diperbarui agar mencatat SEMUA operasi mutasi (POST/PUT/PATCH/DELETE) termasuk yang gagal (4xx, 5xx).
+   - Perbaikan konsistensi `userId`: kini menggunakan `req.user.uid` (Firebase UID) yang konsisten dengan kolom `uid` di tabel `users`.
+   - Ditambahkan exclusion untuk route `/logs/audit` agar tidak terjadi infinite loop saat FE mengirim log.
+   - File yang disentuh:
+     - node-be/middlewares/auditMiddleware.js
+     - node-be/controllers/logController.js (fix userId)
+
+3. SISTEM LOG FILE VIEWER (API BARU)
+   - Menambahkan dua endpoint baru untuk membaca log berbasis file (Winston) dari Frontend Admin:
+     - `GET /logs/system` — Menampilkan daftar file log beserta ukuran dan tipe (HTTP/Application).
+     - `GET /logs/system/:filename?lines=100` — Membaca N baris terakhir dari file log tertentu.
+   - Security: validasi nama file agar hanya file `.log` dalam folder `logs/` yang bisa diakses.
+   - Kedua endpoint dilindungi dengan autentikasi dan permission `system.app`.
+   - Penambahan unit test `tests/auditLogEnhancement.test.js` (5 test, semua lulus).
+   - File yang disentuh:
+     - node-be/controllers/logController.js
+     - node-be/routes/logRoutes.js
+     - node-be/tests/auditLogEnhancement.test.js
+
+Timestamp: 2026-03-01 12:03:00
+
 LATEST UPDATES - 28 Februari 2026
 ==============================
 

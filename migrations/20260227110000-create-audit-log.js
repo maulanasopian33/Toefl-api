@@ -6,18 +6,14 @@ module.exports = {
       id: {
         allowNull: false,
         primaryKey: true,
-        type: Sequelize.STRING,
+        type: Sequelize.UUID,
         defaultValue: Sequelize.UUIDV4
       },
       userId: {
         type: Sequelize.STRING,
-        allowNull: true,
-        references: {
-          model: 'users',
-          key: 'uid'
-        },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL'
+        allowNull: true
+        // Tidak pakai FK constraint karena users PK adalah Firebase UID (string).
+        // Relasi dijaga secara logis di model, bukan di level DB constraint.
       },
       action: {
         type: Sequelize.STRING,

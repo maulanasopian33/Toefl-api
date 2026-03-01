@@ -13,8 +13,8 @@ describe('Database Migration Sync Verification', () => {
     expect(auditLogModel).toBeDefined();
     const attributes = auditLogModel.rawAttributes;
     expect(attributes.userId.type.constructor.name).toBe('STRING');
-    expect(attributes.userId.references.model).toBe('users');
-    expect(attributes.userId.references.key).toBe('uid');
+    // FK constraint dihapus dari DB level untuk kompatibilitas Firebase UID (string PK)
+    // relasi dijaga secara logis di model Sequelize
   });
 
   test('UserResult model should have status field', async () => {

@@ -1,4 +1,4 @@
-const { batch, batchsession, user, sequelize, batchparticipant, payment, section, group, question } = require('../models');
+const { batch, batchsession, user, sequelize, batchparticipant, payment, section, group, question, detailuser } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 const { logger } = require('../utils/logger');
@@ -92,7 +92,7 @@ module.exports = {
       if (result) {
         const creator = await user.findByPk(result.created_by, {
           attributes: ['uid', 'name', 'email'],
-          include: [{ model: db.detailuser, as: 'detailuser' }]
+          include: [{ model: detailuser, as: 'detailuser' }]
         });
         const responseData = result.toJSON();
         responseData.creator = creator;
@@ -161,7 +161,7 @@ module.exports = {
         const creators = await user.findAll({
           where: { uid: creatorIds },
           attributes: ['uid', 'name'],
-          include: [{ model: db.detailuser, as: 'detailuser' }]
+          include: [{ model: detailuser, as: 'detailuser' }]
         });
         creators.forEach(c => {
           creatorMap[c.uid] = c.toJSON();
@@ -246,7 +246,7 @@ module.exports = {
         const users = await user.findAll({
           where: { uid: allUserIds },
           attributes: ['uid', 'name', 'email', 'picture'],
-          include: [{ model: db.detailuser, as: 'detailuser' }]
+          include: [{ model: detailuser, as: 'detailuser' }]
         });
         users.forEach(u => { userMap[u.uid] = u.toJSON(); });
       }

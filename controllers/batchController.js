@@ -31,6 +31,14 @@ module.exports = {
       const createdBy = req.user ? req.user.uid : null;
 
       // 1. Create the Batch
+      let finalScoringConfig = scoring_config;
+      if (scoring_type === 'RAW' && scoring_config) {
+        finalScoringConfig = {
+          ...scoring_config,
+          initialScore: parseInt(scoring_config.initialScore) || 0
+        };
+      }
+
       const newBatch = await batch.create({
         idBatch,
         name,
@@ -48,7 +56,7 @@ module.exports = {
         duration_minutes,
         special_instructions,
         scoring_type,
-        scoring_config,
+        scoring_config: finalScoringConfig,
         created_by: createdBy
       }, { transaction });
 
@@ -324,6 +332,17 @@ module.exports = {
       // Prevent updating idBatch or created_by directly via this endpoint if needed
       delete updateData.idBatch;
       delete updateData.created_by;
+
+      // Ensure scoring_config initialScore is a number if present
+      if (updateData.scoring_type === 'RAW' && updateData.scoring_config) {
+        updateData.scoring_config = {
+          ...updateData.scoring_config,
+          initialScore: parseInt(updateData.scoring_config.initialScore) || 0
+        };
+      } else if (updateData.scoring_config && updateData.scoring_config.initialScore !== undefined) {
+        // Handle case where only scoring_config is sent
+        updateData.scoring_config.initialScore = parseInt(updateData.scoring_config.initialScore) || 0;
+      }
 
       const [updated] = await batch.update(updateData, {
         where: { idBatch }

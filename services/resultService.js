@@ -123,7 +123,8 @@ async function calculateUserResult(userId, batchId, resultId = null) {
     let finalScore = 0;
 
     if (batchInfo.scoring_type === 'RAW') {
-      finalScore = (config.initialScore || 0) + totalCorrect;
+      const initialScore = Number(config.initialScore || 0);
+      finalScore = initialScore + totalCorrect;
     } else {
       // 2. Optimization: Bulk Fetch Scoring Details
       const tableIds = Object.values(sectionMap)

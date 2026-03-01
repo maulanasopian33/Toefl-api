@@ -1,6 +1,20 @@
 LATEST UPDATES - 01 Maret 2026
 ==============================
 
+1. PERBAIKAN COLLATION MISMATCH (ERROR ILLEGAL MIX OF COLLATIONS)
+   - Error: "Illegal mix of collations (utf8mb4_general_ci,IMPLICIT) and (utf8mb4_unicode_ci,IMPLICIT) for operation '='".
+   - Root cause: Tabel `audit_logs` di server production dibuat dengan collation default MySQL (utf8mb4_unicode_ci), berbeda dengan tabel `users` yang menggunakan utf8mb4_general_ci.
+   - Fix: Membuat migration baru untuk mengubah collation tabel `audit_logs` di production menjadi utf8mb4_general_ci.
+   - Memperbarui migration awal untuk menentukan charset/collation secara eksplisit agar tidak terjadi lagi pada server baru.
+   - File yang disentuh:
+     - node-be/migrations/20260301120000-fix-audit-log-collation.js (BARU)
+     - node-be/migrations/20260227110000-create-audit-log.js (update charset/collation)
+
+Timestamp: 2026-03-01 12:22:00
+
+LATEST UPDATES - 01 Maret 2026
+==============================
+
 1. PERBAIKAN MIGRASI AUDIT_LOGS (ERRNO 150 FOREIGN KEY)
    - Menghapus FK constraint pada kolom `userId` di migrasi `audit_logs` yang menyebabkan error "errno: 150 Foreign key constraint incorrectly formed".
    - Root cause: tabel `users` menggunakan Firebase UID (STRING) sebagai Primary Key, sehingga tidak bisa digunakan sebagai referensi FK standar MySQL.

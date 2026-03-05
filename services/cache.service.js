@@ -136,8 +136,10 @@ async function getCacheTTL(key) {
 async function clearAll() {
   if (!isRedisReady()) return false;
   try {
-    await client.flushdb();
-    logger.info('[Cache] clearAll: All cache keys flushed (FLUSHDB).');
+    // AWAS: flushdb() menghapus isi SELURUH DB 0 (semua platform).
+    // Untuk isolasi multi-tenant, kita hanya boleh hapus yang punya prefix kita.
+    await clearByPattern('*'); 
+    logger.info('[Cache] clearAll: Prefix-specific keys flushed.');
     return true;
   } catch (err) {
     logger.error(`[Cache] clearAll error: ${err.message}`);

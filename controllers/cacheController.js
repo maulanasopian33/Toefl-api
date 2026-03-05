@@ -49,8 +49,9 @@ exports.getStatus = async (req, res, next) => {
     const total = hits + misses;
     const hitRate = total > 0 ? ((hits / total) * 100).toFixed(2) + '%' : 'N/A';
 
-    // Ambil sample keys (max 100)
-    const [, keys] = await client.scan(0, 'COUNT', 100);
+    // Ambil sample keys (max 100) yang HANYA milik platform ini
+    const prefix = client.options.keyPrefix || '';
+    const [, keys] = await client.scan(0, 'MATCH', prefix + '*', 'COUNT', 100);
 
     const memoryUsageBytes = parseInt(infoMap['used_memory'] || '0', 10);
     const maxMemoryBytes = parseInt(infoMap['maxmemory'] || '0', 10);
@@ -60,6 +61,8 @@ exports.getStatus = async (req, res, next) => {
       message: 'Redis cache status berhasil diambil.',
       data: {
         connected: true,
+        env_prefix: process.env.REDIS_PREFIX || '(not set)',
+        effective_prefix: client.options.keyPrefix || '(none)',
         redis_version: infoMap['redis_version'] || 'unknown',
         redis_mode: infoMap['redis_mode'] || 'standalone',
         uptime_in_seconds: parseInt(infoMap['uptime_in_seconds'] || '0', 10),

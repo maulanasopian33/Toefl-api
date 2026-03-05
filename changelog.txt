@@ -1,7 +1,23 @@
 LATEST UPDATES - 05 Maret 2026
 ==============================
 
-1. OPTIMASI CACHE REDIS MENYELURUH (MULTI-CONTROLLER EXPANSION)
+1. FINE-TUNING STRATEGI CACHE (TTL & INVALIDATION)
+   - Penyesuaian TTL berdasarkan volatilitas data:
+     - **Data Dinamis (3-5 Menit)**: Admin Stats, Reports, Audit Logs, dan Hasil Ujian (Results). Menyeimbangkan performa dashboard dengan aktualitas data.
+     - **Data Statis (20-30 Menit)**: Batch, Bank Soal (Questions, Groups, Sections), dan Metadata Ujian. Mengurangi beban I/O database secara signifikan.
+   - Implementasi caching baru pada `logController.js` dan `resultController.js` untuk performa admin yang lebih responsif.
+   - Audit dan perbaikan Invalidation CRUD: Memastikan cache segera dibersihkan saat ada perubahan data di `Batch`, `Roles`, dan `Certificates`.
+   - Optimasi Cache Key: Menggunakan MD5 hashing untuk query parameter yang panjang pada filter log dan hasil ujian.
+
+2. REFAKTOR TOTAL KE REDIS & OPTIMASI RAM (FULL MIGRATION)
+   - Penghapusan dependensi `node-cache` (local memory) secara permanen untuk membebaskan RAM VPS.
+   - Migrasi seluruh logika cache di `resultService.js` and `examController.js` ke Redis asinkron.
+   - Perbaikan ReferenceError pada variabel `testId` di `getTestMetadata`.
+   - Pembersihan logika "Dual-Cache" dan "Backward Compatibility" yang redundan.
+   - Penghapusan file infrastruktur lama `utils/cache.js`.
+   - Estimasi penghematan RAM: 20-50MB (bergantung beban data ujian aktif).
+
+3. OPTIMASI CACHE REDIS MENYELURUH (MULTI-CONTROLLER EXPANSION)
    - Implementasi caching pada 8+ controller strategis (Admin Stats, Roles, Certificates, Question Bank, Reports).
    - Penambahan cache pada `getBatchById` (User Request) dengan invalidasi otomatis saat update/delete.
    - Optimasi Dashboard Admin: Data rekapitulasi (`getStats`) di-cache 5 menit untuk mengurangi beban query COUNT yang berat.
@@ -10,7 +26,7 @@ LATEST UPDATES - 05 Maret 2026
    - Optimasi Report: Caching pada hasil rekapitulasi nilai dan daftar peserta (TTL 5-10 menit).
    - Penambahan header `X-Cache: HIT/MISS` pada semua endpoint yang terintegrasi cache.
 
-Timestamp: 2026-03-05 10:52:00
+Timestamp: 2026-03-05 12:18:00
 
 LATEST UPDATES - 05 Maret 2026
 ==============================

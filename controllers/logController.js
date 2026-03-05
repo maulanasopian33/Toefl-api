@@ -4,6 +4,11 @@ const Joi = require('joi');
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const crypto = require('crypto');
+const { getCache, setCache, clearByPattern } = require('../services/cache.service');
+
+const LOG_CACHE_PREFIX = 'log:';
+const LOG_CACHE_TTL = 180; // 3 menit
 
 const LOG_DIR = path.join(__dirname, '../logs');
 
@@ -36,6 +41,9 @@ exports.createAuditLog = async (req, res, next) => {
       source: source || 'frontend'
     });
 
+    // Invalidate cache
+    await clearByPattern(`${LOG_CACHE_PREFIX}*`);
+
     res.status(201).json({ status: true });
   } catch (error) {
     console.error('Audit Log Controller Error:', error);
@@ -47,6 +55,15 @@ exports.createAuditLog = async (req, res, next) => {
 exports.getAuditLogs = async (req, res, next) => {
   try {
     const { page = 1, limit = 20, module, userId, action, startDate, endDate } = req.query;
+    
+    // Cache Check
+    const queryStr = JSON.stringify(req.query);
+    const queryHash = crypto.createHash('md5').update(queryStr).digest('hex');
+    const cacheKey = `${LOG_CACHE_PREFIX}all:${queryHash}`;
+    
+    const cached = await getCache(cacheKey);
+    if (cached) return res.set('X-Cache', 'HIT').json(cached);
+
     const offset = (page - 1) * limit;
 
     const where = {};
@@ -88,7 +105,7 @@ exports.getAuditLogs = async (req, res, next) => {
       user: userMap[log.userId] || null
     }));
 
-    res.status(200).json({
+    const responseData = {
       status: true,
       data: {
         totalItems: count,
@@ -96,7 +113,10 @@ exports.getAuditLogs = async (req, res, next) => {
         currentPage: parseInt(page),
         logs
       }
-    });
+    };
+
+    await setCache(cacheKey, responseData, LOG_CACHE_TTL);
+    res.set('X-Cache', 'MISS').status(200).json(responseData);
   } catch (error) {
     next(error);
   }

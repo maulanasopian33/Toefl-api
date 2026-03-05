@@ -11,7 +11,7 @@ const {
 } = require('../models');
 const { logger } = require('../utils/logger');
 const { Op } = require('sequelize');
-const cache = require('../utils/cache');
+const cacheService = require('./cache.service');
 
 /**
  * Mendapatkan kategori fallback (listening/structure/reading) berdasarkan nama section.
@@ -147,7 +147,7 @@ async function calculateUserResult(userId, batchId, resultId = null) {
       let allDetails = [];
       if (tableIds.length > 0) {
         const cacheKey = `scoring_details_${[...new Set(tableIds)].sort().join('_')}`;
-        allDetails = cache.get(cacheKey);
+        allDetails = await cacheService.getCache(cacheKey);
 
         if (!allDetails) {
           allDetails = await scoringdetail.findAll({
@@ -155,7 +155,7 @@ async function calculateUserResult(userId, batchId, resultId = null) {
             attributes: ['scoring_table_id', 'section_category', 'correct_count', 'converted_score']
           });
           // Cache scoring details selama 1 jam karena data ini jarang berubah
-          cache.set(cacheKey, allDetails, 3600);
+          await cacheService.setCache(cacheKey, allDetails, 3600);
         }
       }
 
@@ -242,14 +242,14 @@ async function getSectionScores(userId, batchId, scoringType, scoringConfig = {}
     let allDetails = [];
     if (tableIds.length > 0) {
       const cacheKey = `scoring_details_${[...new Set(tableIds)].sort().join('_')}`;
-      allDetails = cache.get(cacheKey);
+      allDetails = await cacheService.getCache(cacheKey);
 
       if (!allDetails) {
         allDetails = await scoringdetail.findAll({
           where: { scoring_table_id: { [Op.in]: [...new Set(tableIds)] } },
           attributes: ['scoring_table_id', 'section_category', 'correct_count', 'converted_score']
         });
-        cache.set(cacheKey, allDetails, 3600);
+        await cacheService.setCache(cacheKey, allDetails, 3600);
       }
     }
 

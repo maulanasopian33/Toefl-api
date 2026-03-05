@@ -2,7 +2,7 @@ const { group, question } = require('../models');
 const { getCache, setCache, deleteCache, clearByPattern } = require('../services/cache.service');
 
 const GROUP_CACHE_PREFIX = 'group:';
-const GROUP_CACHE_TTL = 3600; // 1 jam
+const GROUP_CACHE_TTL = 1800; // 30 menit
 
 // Get all groups (include questions)
 exports.getAll = async (req, res) => {

@@ -15,7 +15,7 @@ const { Op } = require('sequelize');
 const { jsonToCsv } = require('../utils/csvGenerator');
 const { getCache, setCache } = require('../services/cache.service');
 
-const REPORT_CACHE_TTL = 600; // 10 menit untuk rekap
+const REPORT_CACHE_TTL = 300; // 5 menit untuk rekap
 const PARTICIPANT_CACHE_TTL = 300; // 5 menit untuk list
 
 exports.getExamReport = async (req, res, next) => {

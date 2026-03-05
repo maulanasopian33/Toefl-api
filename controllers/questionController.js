@@ -2,7 +2,7 @@ const { question } = require('../models');
 const { getCache, setCache, deleteCache, clearByPattern } = require('../services/cache.service');
 
 const QUESTION_CACHE_PREFIX = 'question:';
-const QUESTION_CACHE_TTL = 60; // 60 detik
+const QUESTION_CACHE_TTL = 1800; // 30 menit
 
 module.exports = {
   async getAll(req, res) {

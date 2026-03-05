@@ -5,7 +5,6 @@ const db = require('../models');
 const { sequelize } = require('../models');
 const { logger } = require('../utils/logger');
 const crypto = require('crypto');
-const cache = require('../utils/cache');
 const cacheService = require('../services/cache.service');
 const { pushToQueue } = require('../services/submissionQueue');
 
@@ -118,7 +117,7 @@ exports.getExamData = async (req, res, next) => {
 
     // Simpan ke Redis hanya jika belum terkunci (data bisa berubah saat terkunci)
     if (!isLocked) {
-      await cacheService.setCache(redisCacheKey, response, 60); // TTL 60 detik
+      await cacheService.setCache(redisCacheKey, response, 1200); // TTL 20 menit
     }
 
     res.set('X-Cache', 'MISS').status(200).json(response);
@@ -148,11 +147,6 @@ exports.updateExamData = async (req, res, next) => {
     await cacheService.deleteCache(`exam:metadata:${batchId}`);
     // Hapus semua cache section terkait batch ini
     await cacheService.clearByPattern(`exam:section:${batchId}:*`);
-    // Backward compat: hapus juga node-cache lama (jika masih berjalan)
-    cache.del(`metadata_${batchId}`);
-    if (result.incomingSectionIds && result.incomingSectionIds.length > 0) {
-      result.incomingSectionIds.forEach(id => { cache.del(`section_${id}`); });
-    }
 
     res.status(200).json({ message: `Data ujian untuk batch ${batchId} berhasil diperbarui.` });
   } catch (error) {
@@ -171,19 +165,12 @@ exports.updateExamData = async (req, res, next) => {
 exports.getTestMetadata = async (req, res, next) => {
     const { testId } = req.params;
     const redisCacheKey = `exam:metadata:${testId}`;
-    const legacyCacheKey = `metadata_${testId}`;
 
     try {
-        // Cek Redis cache dulu
+        // Cek Redis cache
         const redisCached = await cacheService.getCache(redisCacheKey);
         if (redisCached) {
             return res.set('X-Cache', 'HIT').status(200).json(redisCached);
-        }
-
-        // Fallback ke node-cache (backward compat)
-        const cachedData = cache.get(legacyCacheKey);
-        if (cachedData) {
-           return res.set('X-Cache', 'HIT-LEGACY').status(200).json(cachedData);
         }
 
         const batch = await db.batch.findByPk(testId, {
@@ -247,9 +234,8 @@ exports.getTestMetadata = async (req, res, next) => {
             sectionOrder: sectionOrder
         };
 
-        // Simpan ke Redis (TTL 60s) dan node-cache (backward compat)
-        await cacheService.setCache(redisCacheKey, responseData, 60);
-        cache.set(legacyCacheKey, responseData, 300);
+        // Simpan ke Redis (TTL 20 menit)
+        await cacheService.setCache(redisCacheKey, responseData, 1200);
         res.set('X-Cache', 'MISS').status(200).json(responseData);
 
     } catch (error) {
@@ -266,7 +252,6 @@ exports.getSectionData = async (req, res, next) => {
   try {
     const { sectionId, testId } = req.params;
     const redisCacheKey = `exam:section:${testId || 'unknown'}:${sectionId}`;
-    const legacyCacheKey = `section_${sectionId}`;
 
     // 1. Cek Redis cache
     const redisCached = await cacheService.getCache(redisCacheKey);
@@ -287,27 +272,6 @@ exports.getSectionData = async (req, res, next) => {
       const responseWithoutBatchInfo = { ...redisCached };
       delete responseWithoutBatchInfo._batchInfo;
       return res.set('X-Cache', 'HIT').status(200).json(responseWithoutBatchInfo);
-    }
-
-    // 2. Fallback: node-cache lama (backward compat)
-    const cachedData = cache.get(legacyCacheKey);
-    if (cachedData) {
-      const now = new Date();
-      const batch = cachedData._batchInfo;
-      if (batch) {
-        if (batch.start_date && now < new Date(batch.start_date)) {
-            return res.status(403).json({ status: false, message: "Ujian belum dimulai.", scheduledStart: batch.start_date });
-        }
-        if (batch.end_date && now > new Date(batch.end_date)) {
-            return res.status(403).json({ status: false, message: "Waktu pengerjaan ujian telah berakhir." });
-        }
-        if (batch.status === 'FINISHED' || batch.status === 'CLOSED' || batch.status === 'CANCELLED') {
-            return res.status(403).json({ status: false, message: `Ujian tidak aktif (Status: ${batch.status}).` });
-        }
-      }
-      const responseWithoutBatchInfo = { ...cachedData };
-      delete responseWithoutBatchInfo._batchInfo;
-      return res.set('X-Cache', 'HIT-LEGACY').status(200).json(responseWithoutBatchInfo);
     }
 
     const section = await db.section.findByPk(sectionId, {

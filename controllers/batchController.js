@@ -4,7 +4,7 @@ const { Op } = require('sequelize');
 const { logger } = require('../utils/logger');
 const { deleteCache, clearByPattern, getCache, setCache } = require('../services/cache.service');
 
-const BATCH_CACHE_TTL = 30; // 30 detik untuk data batch (sering berubah)
+const BATCH_CACHE_TTL = 1800; // 1800 detik untuk data batch (sering berubah)
 
 module.exports = {
   createBatch: async (req, res) => {
@@ -83,6 +83,9 @@ module.exports = {
       }
 
       await transaction.commit();
+
+      // Invalidasi cache batch list
+      await clearByPattern('batch:all:*');
 
       // Fetch the created batch with sessions to return
       // Use separate query for creator to avoid collation issues

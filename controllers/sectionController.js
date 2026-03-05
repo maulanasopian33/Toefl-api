@@ -2,7 +2,7 @@ const { section, group, question, option, groupaudioinstruction, sectionaudioins
 const { getCache, setCache, deleteCache, clearByPattern } = require('../services/cache.service');
 
 const SECTION_CACHE_PREFIX = 'section:';
-const SECTION_CACHE_TTL = 3600; // 1 jam
+const SECTION_CACHE_TTL = 1800; // 30 menit
 
 // Get all sections (include groups)
 exports.getAll = async (req, res) => {

@@ -5,6 +5,11 @@ const {
   getSectionScores
 } = require('../services/resultService');
 const { logger } = require('../utils/logger');
+const crypto = require('crypto');
+const { getCache, setCache, deleteCache, clearByPattern } = require('../services/cache.service');
+
+const RESULT_CACHE_PREFIX = 'result:';
+const RESULT_CACHE_TTL = 180; // 3 menit
 
 /**
  * Menghitung ulang hasil ujian untuk user di batch tertentu.
@@ -31,6 +36,10 @@ exports.calculateResult = async (req, res) => {
 exports.getResultsByBatch = async (req, res, next) => {
   try {
     const { batchId } = req.params;
+    const cacheKey = `${RESULT_CACHE_PREFIX}batch:${batchId}`;
+    
+    const cached = await getCache(cacheKey);
+    if (cached) return res.set('X-Cache', 'HIT').json(cached);
 
     // 1. Ambil semua hasil tes beserta data user dan batch
     const userResults = await db.userresult.findAll({
@@ -71,7 +80,8 @@ exports.getResultsByBatch = async (req, res, next) => {
       };
     }));
 
-    res.status(200).json(formattedResults);
+    await setCache(cacheKey, formattedResults, RESULT_CACHE_TTL);
+    res.set('X-Cache', 'MISS').status(200).json(formattedResults);
   } catch (error) {
     logger.error(`getResultsByBatch Error: ${error.message}`, { batchId: req.params.batchId });
     next(error);
@@ -85,6 +95,11 @@ exports.getResultsByBatch = async (req, res, next) => {
 exports.getResultById = async (req, res, next) => {
   try {
     const { resultId } = req.params;
+    const cacheKey = `${RESULT_CACHE_PREFIX}detail:${resultId}`;
+    
+    const cached = await getCache(cacheKey);
+    if (cached) return res.set('X-Cache', 'HIT').json(cached);
+
     const numericId = resultId.startsWith('res-') ? resultId.substring(4) : resultId;
 
     if (isNaN(numericId)) {
@@ -113,7 +128,7 @@ exports.getResultById = async (req, res, next) => {
       userResult.batch.scoring_config
     );
 
-    res.status(200).json({
+    const responseData = {
       id: `res-${userResult.id}`,
       user: {
         uid: userResult.user.uid,
@@ -125,7 +140,10 @@ exports.getResultById = async (req, res, next) => {
       score: userResult.score,
       sectionScores,
       submittedAt: userResult.submittedAt
-    });
+    };
+
+    await setCache(cacheKey, responseData, RESULT_CACHE_TTL);
+    res.set('X-Cache', 'MISS').status(200).json(responseData);
   } catch (error) {
     logger.error(`getResultById Error: ${error.message}`, { resultId: req.params.resultId });
     next(error);
@@ -139,6 +157,10 @@ exports.getResultById = async (req, res, next) => {
 exports.getResultsByUserAndBatch = async (req, res, next) => {
   try {
     const { userId: userUid, batchId } = req.params;
+    const cacheKey = `${RESULT_CACHE_PREFIX}user:${userUid}:batch:${batchId}`;
+    
+    const cached = await getCache(cacheKey);
+    if (cached) return res.set('X-Cache', 'HIT').json(cached);
 
     const user = await db.user.findOne({
       where: { uid: userUid },
@@ -172,14 +194,17 @@ exports.getResultsByUserAndBatch = async (req, res, next) => {
       };
     }));
 
-    res.status(200).json({
+    const responseData = {
       userId: user.uid,
       userName: user.name,
       userEmail: user.email,
       nim: user.detailuser?.nim || null,
       namaLengkap: user.detailuser?.namaLengkap || null,
       results: resultsList
-    });
+    };
+
+    await setCache(cacheKey, responseData, RESULT_CACHE_TTL);
+    res.set('X-Cache', 'MISS').status(200).json(responseData);
   } catch (error) {
     logger.error(`getResultsByUserAndBatch Error: ${error.message}`, { params: req.params });
     next(error);
@@ -251,6 +276,13 @@ exports.getCandidates = async (req, res, next) => {
       page = 1,
       limit = 10
     } = req.query;
+
+    const queryStr = JSON.stringify(req.query);
+    const queryHash = crypto.createHash('md5').update(queryStr).digest('hex');
+    const cacheKey = `${RESULT_CACHE_PREFIX}candidates:${queryHash}`;
+    
+    const cached = await getCache(cacheKey);
+    if (cached) return res.set('X-Cache', 'HIT').json(cached);
 
     const pageNum = parseInt(page) || 1;
     const limitNum = parseInt(limit) || 10;
@@ -406,7 +438,7 @@ exports.getCandidates = async (req, res, next) => {
     // Saya akan comment part filter status ini sebagai TODO: Implement Relation Check.
     
     // Final Response
-    res.json({
+    const responseData = {
       data,
       meta: {
         total: count,
@@ -418,7 +450,10 @@ exports.getCandidates = async (req, res, next) => {
             average_score: avgScoreResult ? parseFloat(avgScoreResult.get('avgScore')).toFixed(2) : 0
         }
       }
-    });
+    };
+
+    await setCache(cacheKey, responseData, RESULT_CACHE_TTL);
+    res.set('X-Cache', 'MISS').status(200).json(responseData);
 
   } catch (error) {
     logger.error(`getCandidates Error: ${error.message}`, { query: req.query });
@@ -470,6 +505,12 @@ exports.recalculateBatch = async (req, res, next) => {
       }
     }));
 
+    // 3. Clear Cache
+    await Promise.all([
+      clearByPattern(`${RESULT_CACHE_PREFIX}*`),
+      clearByPattern(`report:*`)
+    ]);
+
     res.status(200).json({
       message: `Proses hitung ulang selesai untuk batch ${batchId}.`,
       summary: {
@@ -513,6 +554,12 @@ exports.deleteResult = async (req, res, next) => {
     await userResult.destroy({ transaction });
 
     await transaction.commit();
+
+    // 3. Clear Cache
+    await Promise.all([
+      clearByPattern(`${RESULT_CACHE_PREFIX}*`),
+      clearByPattern(`report:*`)
+    ]);
 
     logger.info(`Result deleted: ID ${historyId}, User ${userResult.userId}, Batch ${userResult.batchId}`);
     

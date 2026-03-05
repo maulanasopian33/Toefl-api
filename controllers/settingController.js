@@ -1,6 +1,10 @@
 // controllers/settingController.js
 
 const db = require('../models');
+const { getCache, setCache, deleteCache } = require('../services/cache.service');
+
+const CACHE_KEY = 'settings:global';
+const CACHE_TTL = 300; // 5 menit
 
 /**
  * Mengambil data pengaturan aplikasi.
@@ -8,18 +12,28 @@ const db = require('../models');
  */
 exports.getSettings = async (req, res, next) => {
   try {
-    let settings = await db.setting.findOne();
+    // 1. Cek cache
+    const cached = await getCache(CACHE_KEY);
+    if (cached) {
+      return res.set('X-Cache', 'HIT').status(200).json(cached);
+    }
 
+    // 2. Ambil dari DB
+    let settings = await db.setting.findOne();
     if (!settings) {
-      // Jika belum ada data, buat data pengaturan default
       settings = await db.setting.create({});
     }
 
-    res.status(200).json({
+    const response = {
       status: true,
       message: 'Pengaturan berhasil diambil.',
       data: settings
-    });
+    };
+
+    // 3. Simpan ke cache
+    await setCache(CACHE_KEY, response, CACHE_TTL);
+
+    res.set('X-Cache', 'MISS').status(200).json(response);
   } catch (error) {
     next(error);
   }
@@ -31,7 +45,6 @@ exports.getSettings = async (req, res, next) => {
  */
 exports.updateSettings = async (req, res, next) => {
   try {
-    // Daftar kolom yang diizinkan untuk diupdate dari request body
     const allowedFields = [
       'nama_aplikasi',
       'nama_pendek',
@@ -56,7 +69,6 @@ exports.updateSettings = async (req, res, next) => {
       'payment_offline_details'
     ];
 
-    // Filter req.body untuk hanya menyertakan kolom yang diizinkan
     const updateData = {};
     Object.keys(req.body).forEach(key => {
       if (allowedFields.includes(key)) {
@@ -70,9 +82,11 @@ exports.updateSettings = async (req, res, next) => {
     });
 
     if (!created) {
-      // Jika data sudah ada, perbarui
       await settings.update(updateData, { user: req.user });
     }
+
+    // Invalidasi cache setelah update berhasil
+    await deleteCache(CACHE_KEY);
 
     res.status(200).json({
       status: true,

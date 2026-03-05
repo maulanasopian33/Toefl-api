@@ -1,3 +1,51 @@
+LATEST UPDATES - 05 Maret 2026
+==============================
+
+1. OPTIMASI APLIKASI NODE.JS (APP-LEVEL) UNTUK VPS 1GB RAM:
+   - Implementasi `compression` (Gzip) di Express untuk memperkecil ukuran payload API response (sangat membantu load data ujian yang besar).
+   - Tuning Sequelize connection pool pada environment production: `max: 10`, `min: 2` (mengurangi overhead memori per koneksi DB).
+   - Ditambahkan dependensi `compression@1.x` ke `package.json`.
+   - File yang disentuh: node-be/app.js, node-be/config/config.js, node-be/package.json.
+
+2. IMPLEMENTASI REDIS CENTRALIZED CACHE LAYER
+   - Menggantikan `node-cache` (in-memory per process) dengan `ioredis` sebagai shared centralized cache.
+   - Seluruh instance PM2 kini berbagi satu Redis server, sehingga cache konsisten lintas proses.
+   - Dependensi baru: `ioredis@5.x` (ditambahkan ke `package.json`).
+
+   a) INFRASTRUKTUR BARU:
+      - `config/redis.js`: Singleton ioredis client dengan lazyConnect, enableOfflineQueue: false, exponential backoff retry.
+      - `services/cache.service.js`: Abstraksi layer lengkap — getCache, setCache (dengan size guard 512KB), deleteCache, clearByPattern (SCAN non-blocking), getCacheTTL, clearAll.
+      - `middlewares/cache.middleware.js`: Reusable Express middleware — cacheMiddleware (static key) dan cacheMiddlewareDynamic (key dari req). Menambahkan header X-Cache: HIT/MISS.
+      - Graceful fallback di semua operasi cache: jika Redis down, sistem tetap mengambil data dari database tanpa crash.
+
+   b) ADMIN CACHE MANAGEMENT API (dilindungi permission 'system.app'):
+      - `controllers/cacheController.js`: getStatus (INFO Redis: memory, hit rate, eviction stats, rekomendasi VPS 1GB), clearAll (FLUSHDB), clearByPatternHandler.
+      - `routes/cacheRoutes.js`: GET /admin/cache/status, POST /admin/cache/clear, POST /admin/cache/clear/:pattern.
+      - Didaftarkan di `app.js` sebagai `app.use('/admin', cacheRoutes)`.
+
+   c) INTEGRASI CACHE DI 4 CONTROLLER:
+      - `settingController.js`: Cache GET /settings → key `settings:global` TTL 300s; invalidasi saat updateSettings.
+      - `scoringController.js`: Cache GET /scoring → key `scoring:all` TTL 300s; Cache GET /scoring/:id → key `scoring:detail:{id}` TTL 300s; invalidasi paralel (Promise.all) saat store/update/destroy.
+      - `batchController.js`: Cache GET /batch → key `batch:all:{status}:{type}` TTL 30s (query-aware); invalidasi clearByPattern('batch:all:*') saat updateBatch & deleteBatch.
+      - `examController.js`: Cache getExamData → `exam:data:{batchId}` TTL 60s (hanya jika exam belum terkunci); Cache getTestMetadata → `exam:metadata:{batchId}` TTL 60s; Cache getSectionData → `exam:section:{batchId}:{sectionId}` TTL 60s. updateExamData menginvalidasi semua key terkait. Backward-compatible dengan node-cache lama.
+
+   d) KONFIGURASI & ENV:
+      - Ditambahkan ke `.env.template`: REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_DB.
+      - Rekomendasi redis.conf untuk VPS 1GB: maxmemory 128mb, maxmemory-policy allkeys-lru.
+
+   e) UNIT TEST (25 test, semua LULUS):
+      - `tests/cacheService.test.js`: 19 test (HIT, MISS, Size Guard, Recovery, SCAN strategy).
+      - `tests/cacheMiddleware.test.js`: 6 test (Middleware flow, Header injection, Fallback logic).
+
+   File yang disentuh:
+      - node-be/config/redis.js, node-be/services/cache.service.js, node-be/middlewares/cache.middleware.js
+      - node-be/controllers/cacheController.js, node-be/routes/cacheRoutes.js, node-be/app.js
+      - node-be/controllers/settingController.js, node-be/controllers/scoringController.js
+      - node-be/controllers/batchController.js, node-be/controllers/examController.js
+      - node-be/.env.template, node-be/tests/cacheService.test.js, node-be/tests/cacheMiddleware.test.js
+
+Timestamp: 2026-03-05 09:25:00
+
 LATEST UPDATES - 01 Maret 2026
 ==============================
 

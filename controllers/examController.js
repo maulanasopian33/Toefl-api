@@ -5,7 +5,9 @@ const db = require('../models');
 const { sequelize } = require('../models');
 const { logger } = require('../utils/logger');
 const crypto = require('crypto');
-const cache = require('../utils/cache');const { pushToQueue } = require('../services/submissionQueue');
+const cache = require('../utils/cache');
+const cacheService = require('../services/cache.service');
+const { pushToQueue } = require('../services/submissionQueue');
 
 /**
  * Mengambil seluruh data ujian (sections, groups, questions, options)
@@ -14,6 +16,13 @@ const cache = require('../utils/cache');const { pushToQueue } = require('../serv
 exports.getExamData = async (req, res, next) => {
   try {
     const { examId } = req.params;
+
+    // Cek Redis cache terlebih dahulu (hanya untuk data yang tidak terkunci)
+    const redisCacheKey = `exam:data:${examId}`;
+    const cachedExam = await cacheService.getCache(redisCacheKey);
+    if (cachedExam) {
+      return res.set('X-Cache', 'HIT').status(200).json(cachedExam);
+    }
 
     // 1. Cek status lock (apakah sudah mulai atau sudah ada pengerjaan)
     const batch = await db.batch.findByPk(examId, { attributes: ['start_date', 'status'] });
@@ -38,7 +47,7 @@ exports.getExamData = async (req, res, next) => {
                   as: 'options',
                   attributes: ['idOption', 'text', 'isCorrect'],
                 },
-              ], // Include type from question model
+              ],
               attributes: ['idQuestion', 'text', 'type', 'audioUrl', 'options_alignment'],
             },
             {
@@ -46,7 +55,7 @@ exports.getExamData = async (req, res, next) => {
               as: 'audioInstructions',
               attributes: ['audioUrl'],
             },
-          ], // Include idGroup for keying in FE
+          ],
           attributes: ['idGroup', 'passage'],
         },
         {
@@ -68,35 +77,31 @@ exports.getExamData = async (req, res, next) => {
       return res.status(404).json({ message: `Ujian dengan ID ${examId} tidak ditemukan.` });
     }
 
-   logger.info('Sections:', sections);
     // Format data sesuai ekspektasi frontend
     const formattedData = sections.map(section => {
       return {
         id: section.idSection,
         name: section.namaSection,
-        type: section.namaSection, // Use namaSection for type as well
-        instructions: section.deskripsi, // Frontend will receive HTML escaped
+        type: section.namaSection,
+        instructions: section.deskripsi,
         scoring_table_id: section.scoring_table_id,
         audioUrl: section.audioInstructions && section.audioInstructions.length > 0 ? section.audioInstructions[0].audioUrl : null,
         groups: section.groups.map(group => {
           return {
-            // 'id' for group is not in the example, but idGroup is useful for FE keys
             id: group.idGroup,
-            passage: group.passage, // Frontend will receive HTML escaped
-            // Get all audioUrls from audioInstructions
+            passage: group.passage,
             audioUrls: group.audioInstructions.map(ai => ai.audioUrl),
             questions: group.questions.map(question => {
-              // Find the correct option to get 'correctAnswer'
               const correctOption = question.options.find(opt => opt.isCorrect);
               return {
                 id: question.idQuestion,
-                type: question.type || section.namaSection, // Use question type, fallback to section name
-                question: question.text, // Frontend will receive HTML escaped
+                type: question.type || section.namaSection,
+                question: question.text,
                 audioUrl: question.audioUrl,
                 options: question.options.map(opt => opt.text),
                 correctAnswer: correctOption ? correctOption.text : null,
                 options_alignment: question.options_alignment || 'LTR',
-                userAnswer: null, // Add userAnswer as requested by FE structure
+                userAnswer: null,
               };
             }),
           };
@@ -104,13 +109,19 @@ exports.getExamData = async (req, res, next) => {
       };
     });
 
-    // Send response with locking metadata
-    res.status(200).json({
+    const response = {
       status: true,
       isLocked: !!isLocked,
       lockReason: submissionCount > 0 ? 'SUBMISSIONS_EXIST' : (batch?.start_date && new Date(batch.start_date) <= new Date() ? 'BATCH_STARTED' : null),
       data: formattedData,
-    });
+    };
+
+    // Simpan ke Redis hanya jika belum terkunci (data bisa berubah saat terkunci)
+    if (!isLocked) {
+      await cacheService.setCache(redisCacheKey, response, 60); // TTL 60 detik
+    }
+
+    res.set('X-Cache', 'MISS').status(200).json(response);
   } catch (error) {
     next(error);
   }
@@ -130,15 +141,17 @@ exports.updateExamData = async (req, res, next) => {
 
     const result = await examService.updateExamDataTransaction(batchId, sectionsData, userEmail);
 
-    // --- 4. Invalidate Cache ---
-    // Hapus metadata cache
+    // --- Invalidate Cache (Redis) ---
+    // Hapus cache exam data
+    await cacheService.deleteCache(`exam:data:${batchId}`);
+    // Hapus cache metadata
+    await cacheService.deleteCache(`exam:metadata:${batchId}`);
+    // Hapus semua cache section terkait batch ini
+    await cacheService.clearByPattern(`exam:section:${batchId}:*`);
+    // Backward compat: hapus juga node-cache lama (jika masih berjalan)
     cache.del(`metadata_${batchId}`);
-    
-    // Hapus cache untuk semua section yang terlibat
     if (result.incomingSectionIds && result.incomingSectionIds.length > 0) {
-      result.incomingSectionIds.forEach(id => {
-        cache.del(`section_${id}`);
-      });
+      result.incomingSectionIds.forEach(id => { cache.del(`section_${id}`); });
     }
 
     res.status(200).json({ message: `Data ujian untuk batch ${batchId} berhasil diperbarui.` });
@@ -156,13 +169,21 @@ exports.updateExamData = async (req, res, next) => {
  * Route: GET /tests/:testId/metadata
  */
 exports.getTestMetadata = async (req, res, next) => {
-    const { testId } = req.params; // testId adalah batchId
-    const cacheKey = `metadata_${testId}`;
+    const { testId } = req.params;
+    const redisCacheKey = `exam:metadata:${testId}`;
+    const legacyCacheKey = `metadata_${testId}`;
 
     try {
-        const cachedData = cache.get(cacheKey);
+        // Cek Redis cache dulu
+        const redisCached = await cacheService.getCache(redisCacheKey);
+        if (redisCached) {
+            return res.set('X-Cache', 'HIT').status(200).json(redisCached);
+        }
+
+        // Fallback ke node-cache (backward compat)
+        const cachedData = cache.get(legacyCacheKey);
         if (cachedData) {
-           return res.json(cachedData);
+           return res.set('X-Cache', 'HIT-LEGACY').status(200).json(cachedData);
         }
 
         const batch = await db.batch.findByPk(testId, {
@@ -189,7 +210,6 @@ exports.getTestMetadata = async (req, res, next) => {
         }
 
         const now = new Date();
-        // Cek apakah tes sudah bisa dimulai
         if (batch.start_date && now < new Date(batch.start_date)) {
             return res.status(403).json({ 
                 status: false, 
@@ -198,7 +218,6 @@ exports.getTestMetadata = async (req, res, next) => {
             });
         }
         
-        // Cek apakah tes sudah berakhir (beri toleransi 15 menit untuk persiapan/loading)
         const closeGrace = 15 * 60 * 1000;
         if (batch.end_date && now > new Date(new Date(batch.end_date).getTime() + closeGrace)) {
              return res.status(403).json({ 
@@ -207,7 +226,6 @@ exports.getTestMetadata = async (req, res, next) => {
             });
         }
 
-        // Hitung total pertanyaan dari semua section dan group
         let totalQuestions = 0;
         batch.sections.forEach(section => {
             section.groups.forEach(group => {
@@ -215,7 +233,6 @@ exports.getTestMetadata = async (req, res, next) => {
             });
         });
 
-        // Urutkan section berdasarkan field urutan
         const sectionOrder = batch.sections
             .sort((a, b) => (a.urutan || 0) - (b.urutan || 0))
             .map(s => ({ id: s.idSection, name: s.namaSection }));
@@ -230,8 +247,10 @@ exports.getTestMetadata = async (req, res, next) => {
             sectionOrder: sectionOrder
         };
 
-        cache.set(cacheKey, responseData, 300); // 5 menit
-        res.json(responseData);
+        // Simpan ke Redis (TTL 60s) dan node-cache (backward compat)
+        await cacheService.setCache(redisCacheKey, responseData, 60);
+        cache.set(legacyCacheKey, responseData, 300);
+        res.set('X-Cache', 'MISS').status(200).json(responseData);
 
     } catch (error) {
         next(error);
@@ -245,19 +264,39 @@ exports.getTestMetadata = async (req, res, next) => {
  */
 exports.getSectionData = async (req, res, next) => {
   try {
-    const { sectionId } = req.params;
-    const cacheKey = `section_${sectionId}`;
+    const { sectionId, testId } = req.params;
+    const redisCacheKey = `exam:section:${testId || 'unknown'}:${sectionId}`;
+    const legacyCacheKey = `section_${sectionId}`;
 
-    const cachedData = cache.get(cacheKey);
-    if (cachedData) {
-      // Perlu dilakukan validasi waktu tetap secara real-time walaupun data section di-cache.
-      // Validasi waktu diletakkan setelah cache untuk mencegah caching mencegah timeout ujian.
-      // Namun "batch status" ada di dalam cachedData.batch
+    // 1. Cek Redis cache
+    const redisCached = await cacheService.getCache(redisCacheKey);
+    if (redisCached) {
       const now = new Date();
-      const batch = cachedData._batchInfo; // kita simpan sementara di _batchInfo untuk validasi
+      const batchInfo = redisCached._batchInfo;
+      if (batchInfo) {
+        if (batchInfo.start_date && now < new Date(batchInfo.start_date)) {
+            return res.status(403).json({ status: false, message: "Ujian belum dimulai.", scheduledStart: batchInfo.start_date });
+        }
+        if (batchInfo.end_date && now > new Date(batchInfo.end_date)) {
+            return res.status(403).json({ status: false, message: "Waktu pengerjaan ujian telah berakhir." });
+        }
+        if (batchInfo.status === 'FINISHED' || batchInfo.status === 'CLOSED' || batchInfo.status === 'CANCELLED') {
+            return res.status(403).json({ status: false, message: `Ujian tidak aktif (Status: ${batchInfo.status}).` });
+        }
+      }
+      const responseWithoutBatchInfo = { ...redisCached };
+      delete responseWithoutBatchInfo._batchInfo;
+      return res.set('X-Cache', 'HIT').status(200).json(responseWithoutBatchInfo);
+    }
+
+    // 2. Fallback: node-cache lama (backward compat)
+    const cachedData = cache.get(legacyCacheKey);
+    if (cachedData) {
+      const now = new Date();
+      const batch = cachedData._batchInfo;
       if (batch) {
         if (batch.start_date && now < new Date(batch.start_date)) {
-            return res.status(403).json({ status: false, message: "Ujian belum dimulai.", scheduledStart: batch.start_date  });
+            return res.status(403).json({ status: false, message: "Ujian belum dimulai.", scheduledStart: batch.start_date });
         }
         if (batch.end_date && now > new Date(batch.end_date)) {
             return res.status(403).json({ status: false, message: "Waktu pengerjaan ujian telah berakhir." });
@@ -266,10 +305,9 @@ exports.getSectionData = async (req, res, next) => {
             return res.status(403).json({ status: false, message: `Ujian tidak aktif (Status: ${batch.status}).` });
         }
       }
-      
       const responseWithoutBatchInfo = { ...cachedData };
       delete responseWithoutBatchInfo._batchInfo;
-      return res.status(200).json(responseWithoutBatchInfo);
+      return res.set('X-Cache', 'HIT-LEGACY').status(200).json(responseWithoutBatchInfo);
     }
 
     const section = await db.section.findByPk(sectionId, {
@@ -296,11 +334,11 @@ exports.getSectionData = async (req, res, next) => {
           {
             model: db.question,
             as: 'questions',
-            attributes: ['idQuestion', 'text', 'audioUrl'], // 'text' adalah 'question'
+            attributes: ['idQuestion', 'text', 'audioUrl'],
             include: [{
               model: db.option,
               as: 'options',
-              attributes: ['idOption', 'text'], // Tidak menyertakan isCorrect
+              attributes: ['idOption', 'text'],
             }, ],
           },
         ],
@@ -321,33 +359,20 @@ exports.getSectionData = async (req, res, next) => {
     
     if (batch) {
         if (batch.start_date && now < new Date(batch.start_date)) {
-            return res.status(403).json({ 
-                status: false, 
-                message: "Ujian belum dimulai. Silakan tunggu jadwal yang ditentukan.",
-                scheduledStart: batch.start_date 
-            });
+            return res.status(403).json({ status: false, message: "Ujian belum dimulai. Silakan tunggu jadwal yang ditentukan.", scheduledStart: batch.start_date });
         }
         if (batch.end_date && now > new Date(batch.end_date)) {
-            return res.status(403).json({ 
-                status: false, 
-                message: "Waktu pengerjaan ujian telah berakhir." 
-            });
+            return res.status(403).json({ status: false, message: "Waktu pengerjaan ujian telah berakhir." });
         }
         if (batch.status === 'FINISHED' || batch.status === 'CLOSED' || batch.status === 'CANCELLED') {
-            return res.status(403).json({ 
-                status: false, 
-                message: `Ujian tidak aktif (Status: ${batch.status}).` 
-            });
+            return res.status(403).json({ status: false, message: `Ujian tidak aktif (Status: ${batch.status}).` });
         }
     }
 
-    // Format output JSON sesuai permintaan
     const formattedData = {
       id: section.idSection,
       name: section.namaSection,
       instructions: section.deskripsi,
-      // Cari audio instruction di level section (jika ada)
-      // Asumsi: audio instruction untuk section disimpan di group pertama tanpa passage
       audioInstructions: section.audioInstructions?.[0]?.audioUrl || null,
       groups: section.groups.map(group => ({
         id: group.idGroup,
@@ -367,18 +392,19 @@ exports.getSectionData = async (req, res, next) => {
 
     const cacheDataToStore = {
         ...formattedData,
-        _batchInfo: batch ? { 
-            start_date: batch.start_date, 
-            end_date: batch.end_date, 
-            status: batch.status 
-        } : null
+        _batchInfo: batch ? { start_date: batch.start_date, end_date: batch.end_date, status: batch.status } : null
     };
 
-    cache.set(cacheKey, cacheDataToStore, 300); // cache 5 menit
-    res.status(200).json(formattedData);
+    // Simpan ke Redis + node-cache (backward compat)
+    const batchIdForKey = section.batchId || testId || 'unknown';
+    await cacheService.setCache(`exam:section:${batchIdForKey}:${sectionId}`, cacheDataToStore, 60);
+    cache.set(legacyCacheKey, cacheDataToStore, 300);
+
+    res.set('X-Cache', 'MISS').status(200).json(formattedData);
   } catch (error) {
     next(error);
   }
+
 };
 
 const {

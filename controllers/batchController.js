@@ -2,6 +2,9 @@ const { batch, batchsession, user, sequelize, batchparticipant, payment, section
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 const { logger } = require('../utils/logger');
+const { deleteCache, clearByPattern, getCache, setCache } = require('../services/cache.service');
+
+const BATCH_CACHE_TTL = 30; // 30 detik untuk data batch (sering berubah)
 
 module.exports = {
   createBatch: async (req, res) => {
@@ -135,6 +138,13 @@ module.exports = {
       if (status) where.status = status;
       if (type) where.type = type;
 
+      // Cache key unik berdasarkan filter query
+      const cacheKey = `batch:all:${status || 'any'}:${type || 'any'}`;
+      const cached = await getCache(cacheKey);
+      if (cached) {
+        return res.set('X-Cache', 'HIT').status(200).json(cached);
+      }
+
       // Step 1: Ambil data batch (serta sesi) tanpa JOIN ke tabel ‘user’ langsung
       // Ini menghindari error ‘Illegal mix of collations’ jika ada perbedaan kolasi
       const batchesData = await batch.findAll({
@@ -147,10 +157,9 @@ module.exports = {
 
       // Jika data kosong, langsung kembalikan
       if (batchesData.length === 0) {
-        return res.status(200).json({
-          status: true,
-          data: []
-        });
+        const emptyResponse = { status: true, data: [] };
+        await setCache(cacheKey, emptyResponse, BATCH_CACHE_TTL);
+        return res.set('X-Cache', 'MISS').status(200).json(emptyResponse);
       }
 
       // Ambil semua ID pembuat (created_by) secara unik
@@ -185,10 +194,9 @@ module.exports = {
         return item;
       });
 
-      return res.status(200).json({
-        status: true,
-        data: result
-      });
+      const response = { status: true, data: result };
+      await setCache(cacheKey, response, BATCH_CACHE_TTL);
+      return res.set('X-Cache', 'MISS').status(200).json(response);
     } catch (error) {
       console.error('Error fetching batches:', error);
       return res.status(500).json({
@@ -416,6 +424,9 @@ module.exports = {
         }
       }
 
+      // Invalidasi cache batch setelah update
+      await clearByPattern('batch:all:*');
+
       return res.status(200).json({
         status: true,
         data: responseData
@@ -452,6 +463,9 @@ module.exports = {
           message: 'Batch tidak ditemukan'
         });
       }
+
+      // Invalidasi cache batch setelah delete
+      await clearByPattern('batch:all:*');
 
       return res.status(200).json({
         status: true,

@@ -30,6 +30,7 @@ const scoringRoutes = require('./routes/scoringRoutes');
 const bankRoutes = require('./routes/bankRoutes');
 const certificateTemplateRoutes = require('./routes/certificateTemplateRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const cacheRoutes = require('./routes/cacheRoutes');
 
 
 
@@ -44,6 +45,7 @@ const app = express();
 
 
 const cors = require('cors');
+const compression = require('compression');
 const corsOptions = require('./config/cors');
 const errorHandler = require('./middlewares/errorHandler');
 const auditMiddleware = require('./middlewares/auditMiddleware');
@@ -54,6 +56,7 @@ const checkAuth = require('./middlewares/authMiddleware');
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
+app.use(compression());
 app.use(cors(corsOptions));
 
 // Security Headers
@@ -108,6 +111,7 @@ app.use('/groups', groupRoutes);
 app.use('/sections', sectionRoutes);
 app.use("/audio-instructions", groupAudioInstructionRoutes);
 app.use('/admin', adminStatsRoutes);
+app.use('/admin', cacheRoutes);
 app.use('/exams', examRoutes);
 app.use('/media', mediaRoutes);
 app.use('/logs', logRoutes);

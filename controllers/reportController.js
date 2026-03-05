@@ -13,10 +13,19 @@ const {
 } = require('../models');
 const { Op } = require('sequelize');
 const { jsonToCsv } = require('../utils/csvGenerator');
+const { getCache, setCache } = require('../services/cache.service');
+
+const REPORT_CACHE_TTL = 600; // 10 menit untuk rekap
+const PARTICIPANT_CACHE_TTL = 300; // 5 menit untuk list
 
 exports.getExamReport = async (req, res, next) => {
   try {
     const { batchId } = req.query;
+
+    const cacheKey = `report:exam:${batchId || 'all'}`;
+    const cached = await getCache(cacheKey);
+    if (cached) return res.set('X-Cache', 'HIT').json(cached);
+
     const whereResult = {};
     if (batchId) whereResult.batchId = batchId;
 
@@ -106,7 +115,7 @@ exports.getExamReport = async (req, res, next) => {
     const difficultQuestions = sortedPerformance.slice(0, 5);
     const easiestQuestions = sortedPerformance.slice(-5).reverse();
 
-    res.status(200).json({
+    const responseData = {
       status: true,
       data: {
         summary: {
@@ -122,7 +131,10 @@ exports.getExamReport = async (req, res, next) => {
           easiest: easiestQuestions
         }
       }
-    });
+    };
+
+    await setCache(cacheKey, responseData, REPORT_CACHE_TTL);
+    res.set('X-Cache', 'MISS').status(200).json(responseData);
   } catch (error) {
     next(error);
   }
@@ -131,6 +143,11 @@ exports.getExamReport = async (req, res, next) => {
 exports.getParticipantReport = async (req, res, next) => {
   try {
     const { batchId, search, page = 1, limit = 10 } = req.query;
+
+    const cacheKey = `report:participants:${batchId || 'all'}:${search || 'none'}:${page}:${limit}`;
+    const cached = await getCache(cacheKey);
+    if (cached) return res.set('X-Cache', 'HIT').json(cached);
+
     const offset = (page - 1) * limit;
 
     const whereClause = {};
@@ -169,7 +186,7 @@ exports.getParticipantReport = async (req, res, next) => {
       distinct: true // Important for correct count with includes
     });
 
-    res.status(200).json({
+    const responseData = {
       status: true,
       data: {
         totalItems: count,
@@ -177,7 +194,10 @@ exports.getParticipantReport = async (req, res, next) => {
         currentPage: parseInt(page),
         participants: rows
       }
-    });
+    };
+
+    await setCache(cacheKey, responseData, PARTICIPANT_CACHE_TTL);
+    res.set('X-Cache', 'MISS').status(200).json(responseData);
 
   } catch (error) {
     next(error);

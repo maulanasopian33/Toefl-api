@@ -1,5 +1,10 @@
 const db = require('../models');
 const { sequelize } = require('../models');
+const { getCache, setCache, deleteCache } = require('../services/cache.service');
+
+const ROLES_CACHE_KEY = 'role:all';
+const PERMS_CACHE_KEY = 'perm:all';
+const CACHE_TTL = 86400; // 24 jam (statis)
 
 module.exports = {
   // --- ROLE MANAGEMENT ---
@@ -7,15 +12,22 @@ module.exports = {
   // Mendapatkan semua role beserta permission-nya
   async getAllRoles(req, res, next) {
     try {
+      const cached = await getCache(ROLES_CACHE_KEY);
+      if (cached) {
+        return res.set('X-Cache', 'HIT').status(200).json(cached);
+      }
+
       const roles = await db.role.findAll({
         include: [{
           model: db.permission,
           as: 'permissions',
-          through: { attributes: [] } // Sembunyikan atribut tabel pivot
+          through: { attributes: [] }
         }],
         order: [['id', 'ASC']]
       });
-      res.status(200).json({ status: true, data: roles });
+      const response = { status: true, data: roles };
+      await setCache(ROLES_CACHE_KEY, response, CACHE_TTL);
+      res.set('X-Cache', 'MISS').status(200).json(response);
     } catch (error) {
       next(error);
     }
@@ -63,6 +75,9 @@ module.exports = {
 
       await t.commit();
       
+      // Invalidasi cache roles
+      await deleteCache(ROLES_CACHE_KEY);
+
       // Fetch ulang untuk mengembalikan data lengkap dengan permissions
       const roleWithPerms = await db.role.findByPk(newRole.id, {
         include: [{ model: db.permission, as: 'permissions', through: { attributes: [] } }]
@@ -103,6 +118,9 @@ module.exports = {
 
       await t.commit();
 
+      // Invalidasi cache roles
+      await deleteCache(ROLES_CACHE_KEY);
+
       const updatedRole = await db.role.findByPk(id, {
         include: [{ model: db.permission, as: 'permissions', through: { attributes: [] } }]
       });
@@ -128,6 +146,9 @@ module.exports = {
       }
 
       await role.destroy();
+      // Invalidasi cache roles
+      await deleteCache(ROLES_CACHE_KEY);
+
       res.status(200).json({ status: true, message: 'Role berhasil dihapus.' });
     } catch (error) {
       next(error);
@@ -139,10 +160,17 @@ module.exports = {
   // Mendapatkan semua permission yang tersedia
   async getAllPermissions(req, res, next) {
     try {
+      const cached = await getCache(PERMS_CACHE_KEY);
+      if (cached) {
+        return res.set('X-Cache', 'HIT').status(200).json(cached);
+      }
+
       const permissions = await db.permission.findAll({
         order: [['name', 'ASC']]
       });
-      res.status(200).json({ status: true, data: permissions });
+      const response = { status: true, data: permissions };
+      await setCache(PERMS_CACHE_KEY, response, CACHE_TTL);
+      res.set('X-Cache', 'MISS').status(200).json(response);
     } catch (error) {
       next(error);
     }
@@ -159,6 +187,10 @@ module.exports = {
       }
 
       const newPerm = await db.permission.create({ name, description });
+      
+      // Invalidasi cache permissions
+      await deleteCache(PERMS_CACHE_KEY);
+
       res.status(201).json({ status: true, message: 'Permission berhasil dibuat.', data: newPerm });
     } catch (error) {
       next(error);
@@ -175,6 +207,10 @@ module.exports = {
       if (!perm) return res.status(404).json({ status: false, message: 'Permission tidak ditemukan.' });
 
       await perm.update({ name, description });
+      
+      // Invalidasi cache permissions
+      await deleteCache(PERMS_CACHE_KEY);
+
       res.status(200).json({ status: true, message: 'Permission berhasil diperbarui.', data: perm });
     } catch (error) {
       next(error);
@@ -189,6 +225,10 @@ module.exports = {
       if (!perm) return res.status(404).json({ status: false, message: 'Permission tidak ditemukan.' });
 
       await perm.destroy();
+
+      // Invalidasi cache permissions
+      await deleteCache(PERMS_CACHE_KEY);
+
       res.status(200).json({ status: true, message: 'Permission berhasil dihapus.' });
     } catch (error) {
       next(error);

@@ -210,6 +210,13 @@ module.exports = {
   getBatchById: async (req, res) => {
     try {
       const { idBatch } = req.params;
+
+      // --- Cache Layer ---
+      const cacheKey = `batch:detail:${idBatch}`;
+      const cached = await getCache(cacheKey);
+      if (cached) {
+        return res.set('X-Cache', 'HIT').status(200).json(cached);
+      }
       
       // Step 1: Ambil data batch, sessions, participants, sections, groups, questions
       // Tanpa JOIN ke tabel 'users'
@@ -360,10 +367,12 @@ module.exports = {
       responseData.totalGroups = totalGroups;
       responseData.totalQuestions = totalQuestions;
 
-      return res.status(200).json({
-        status: true,
-        data: responseData
-      });
+      const response = { status: true, data: responseData };
+      
+      // Simpan ke cache
+      await setCache(cacheKey, response, BATCH_CACHE_TTL);
+
+      return res.set('X-Cache', 'MISS').status(200).json(response);
     } catch (error) {
       return res.status(500).json({
         status: false,
@@ -425,7 +434,10 @@ module.exports = {
       }
 
       // Invalidasi cache batch setelah update
-      await clearByPattern('batch:all:*');
+      await Promise.all([
+        clearByPattern('batch:all:*'),
+        deleteCache(`batch:detail:${idBatch}`)
+      ]);
 
       return res.status(200).json({
         status: true,
@@ -465,7 +477,10 @@ module.exports = {
       }
 
       // Invalidasi cache batch setelah delete
-      await clearByPattern('batch:all:*');
+      await Promise.all([
+        clearByPattern('batch:all:*'),
+        deleteCache(`batch:detail:${idBatch}`)
+      ]);
 
       return res.status(200).json({
         status: true,

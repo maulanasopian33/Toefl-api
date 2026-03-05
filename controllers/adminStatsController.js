@@ -1,8 +1,18 @@
 const { batch, group, question, groupaudioinstruction: groupAudioInstruction, payment, user, sequelize, batchparticipant, paymentproof } = require('../models');
 const { Op } = require('sequelize');
+const { getCache, setCache } = require('../services/cache.service');
+
+const STATS_CACHE_KEY = 'stats:admin_dashboard';
+const STATS_CACHE_TTL = 300; // 5 menit
 
 exports.getStats = async (req, res) => {
   try {
+    // Cek cache
+    const cached = await getCache(STATS_CACHE_KEY);
+    if (cached) {
+      return res.set('X-Cache', 'HIT').json(cached);
+    }
+
     const [
       batchCount,
       activeBatchCount,
@@ -43,7 +53,7 @@ exports.getStats = async (req, res) => {
     // Note: Complex aggregation is better done with raw query for performance on large datasets
     // For now, returning simple counts.
 
-    res.json({
+    const responseData = {
       status: true,
       data: {
         counts: {
@@ -62,7 +72,12 @@ exports.getStats = async (req, res) => {
           payments: recentPayments
         }
       }
-    });
+    };
+
+    // Simpan ke cache
+    await setCache(STATS_CACHE_KEY, responseData, STATS_CACHE_TTL);
+
+    res.set('X-Cache', 'MISS').json(responseData);
   } catch (err) {
     console.error('Error getStats:', err);
     res.status(500).json({ message: 'Server error parsing stats' });

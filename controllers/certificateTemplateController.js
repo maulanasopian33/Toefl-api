@@ -1,11 +1,21 @@
 const db = require('../models');
 const { logger } = require('../utils/logger');
+const { getCache, setCache, deleteCache } = require('../services/cache.service');
+
+const CERT_CACHE_KEY_ALL = 'cert:template:all';
+const CERT_CACHE_KEY_DETAIL = (id) => `cert:template:detail:${id}`;
+const CACHE_TTL = 3600; // 1 jam
 
 /**
  * Get all certificate templates with their formats
  */
 exports.getAllTemplates = async (req, res, next) => {
   try {
+    const cached = await getCache(CERT_CACHE_KEY_ALL);
+    if (cached) {
+      return res.set('X-Cache', 'HIT').status(200).json(cached);
+    }
+
     const templates = await db.certificate_template.findAll({
       include: [{
         model: db.certificate_template_format,
@@ -14,10 +24,9 @@ exports.getAllTemplates = async (req, res, next) => {
       order: [['createdAt', 'DESC']]
     });
 
-    res.status(200).json({
-      status: true,
-      data: templates
-    });
+    const response = { status: true, data: templates };
+    await setCache(CERT_CACHE_KEY_ALL, response, CACHE_TTL);
+    res.set('X-Cache', 'MISS').status(200).json(response);
   } catch (error) {
     logger.error('Error fetching certificate templates:', error);
     next(error);
@@ -30,6 +39,12 @@ exports.getAllTemplates = async (req, res, next) => {
 exports.getTemplateById = async (req, res, next) => {
   try {
     const { id } = req.params;
+    
+    const cached = await getCache(CERT_CACHE_KEY_DETAIL(id));
+    if (cached) {
+      return res.set('X-Cache', 'HIT').status(200).json(cached);
+    }
+
     const template = await db.certificate_template.findByPk(id, {
       include: [{
         model: db.certificate_template_format,
@@ -44,10 +59,9 @@ exports.getTemplateById = async (req, res, next) => {
       });
     }
 
-    res.status(200).json({
-      status: true,
-      data: template
-    });
+    const response = { status: true, data: template };
+    await setCache(CERT_CACHE_KEY_DETAIL(id), response, CACHE_TTL);
+    res.set('X-Cache', 'MISS').status(200).json(response);
   } catch (error) {
     next(error);
   }
@@ -111,6 +125,12 @@ exports.saveTemplate = async (req, res, next) => {
 
     await transaction.commit();
 
+    // Invalidasi cache sertifikat
+    await Promise.all([
+      deleteCache(CERT_CACHE_KEY_ALL),
+      deleteCache(CERT_CACHE_KEY_DETAIL(template.id))
+    ]);
+
     const result = await db.certificate_template.findByPk(template.id, {
       include: [{ model: db.certificate_template_format, as: 'formats' }]
     });
@@ -143,6 +163,12 @@ exports.deleteTemplate = async (req, res, next) => {
     }
 
     await template.destroy();
+
+    // Invalidasi cache sertifikat
+    await Promise.all([
+      deleteCache(CERT_CACHE_KEY_ALL),
+      deleteCache(CERT_CACHE_KEY_DETAIL(id))
+    ]);
 
     res.status(200).json({
       status: true,

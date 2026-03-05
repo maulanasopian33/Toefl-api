@@ -1,13 +1,24 @@
 const { section, group, question, option, groupaudioinstruction, sectionaudioinstruction } = require('../models');
+const { getCache, setCache, deleteCache, clearByPattern } = require('../services/cache.service');
+
+const SECTION_CACHE_PREFIX = 'section:';
+const SECTION_CACHE_TTL = 3600; // 1 jam
 
 // Get all sections (include groups)
 exports.getAll = async (req, res) => {
   try {
+    const cacheKey = `${SECTION_CACHE_PREFIX}all`;
+    const cached = await getCache(cacheKey);
+    if (cached) return res.set('X-Cache', 'HIT').json(cached);
+
     const sections = await section.findAll({
       include: [{ model: group, as: 'groups' }],
       order: [['urutan', 'ASC']]
     });
-    res.json(sections);
+    
+    const responseData = { status: true, data: sections };
+    await setCache(cacheKey, responseData, SECTION_CACHE_TTL);
+    res.set('X-Cache', 'MISS').json(responseData);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -16,7 +27,12 @@ exports.getAll = async (req, res) => {
 // Get section by id
 exports.getById = async (req, res) => {
   try {
-    const sec = await section.findByPk(req.params.id, {
+    const { id } = req.params;
+    const cacheKey = `${SECTION_CACHE_PREFIX}detail:${id}`;
+    const cached = await getCache(cacheKey);
+    if (cached) return res.set('X-Cache', 'HIT').json(cached);
+
+    const sec = await section.findByPk(id, {
       include: [
         {
           model: sectionaudioinstruction,
@@ -39,7 +55,7 @@ exports.getById = async (req, res) => {
                 {
                   model: option,
                   as: 'options',
-                  attributes: ['idOption', 'text', 'isCorrect'] // Include key fields
+                  attributes: ['idOption', 'text', 'isCorrect']
                 }
               ]
             }
@@ -53,7 +69,10 @@ exports.getById = async (req, res) => {
       ]
     });
     if (!sec) return res.status(404).json({ error: 'Section not found' });
-    res.json(sec);
+    
+    const responseData = { status: true, data: sec };
+    await setCache(cacheKey, responseData, SECTION_CACHE_TTL);
+    res.set('X-Cache', 'MISS').json(responseData);
   } catch (err) {
     console.error("Error getById section:", err);
     res.status(500).json({ error: err.message });
@@ -64,7 +83,11 @@ exports.getById = async (req, res) => {
 exports.create = async (req, res) => {
   try {
     const newSection = await section.create(req.body);
-    res.status(201).json(newSection);
+    
+    // Invalidate cache
+    await clearByPattern(`${SECTION_CACHE_PREFIX}*`);
+
+    res.status(201).json({ status: true, data: newSection });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -73,10 +96,19 @@ exports.create = async (req, res) => {
 // Update section
 exports.update = async (req, res) => {
   try {
-    const sec = await section.findByPk(req.params.id);
+    const { id } = req.params;
+    const sec = await section.findByPk(id);
     if (!sec) return res.status(404).json({ error: 'Section not found' });
+    
     await sec.update(req.body);
-    res.json(sec);
+
+    // Invalidate cache
+    await Promise.all([
+      clearByPattern(`${SECTION_CACHE_PREFIX}all`),
+      deleteCache(`${SECTION_CACHE_PREFIX}detail:${id}`)
+    ]);
+
+    res.json({ status: true, data: sec });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -85,10 +117,19 @@ exports.update = async (req, res) => {
 // Delete section
 exports.remove = async (req, res) => {
   try {
-    const sec = await section.findByPk(req.params.id);
+    const { id } = req.params;
+    const sec = await section.findByPk(id);
     if (!sec) return res.status(404).json({ error: 'Section not found' });
+    
     await sec.destroy();
-    res.json({ message: 'Section deleted' });
+
+    // Invalidate cache
+    await Promise.all([
+      clearByPattern(`${SECTION_CACHE_PREFIX}all`),
+      deleteCache(`${SECTION_CACHE_PREFIX}detail:${id}`)
+    ]);
+
+    res.json({ status: true, message: 'Section deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -1,6 +1,20 @@
 LATEST UPDATES - 05 Maret 2026
 ==============================
 
+1. OPTIMASI CACHE REDIS MENYELURUH (MULTI-CONTROLLER EXPANSION)
+   - Implementasi caching pada 8+ controller strategis (Admin Stats, Roles, Certificates, Question Bank, Reports).
+   - Penambahan cache pada `getBatchById` (User Request) dengan invalidasi otomatis saat update/delete.
+   - Optimasi Dashboard Admin: Data rekapitulasi (`getStats`) di-cache 5 menit untuk mengurangi beban query COUNT yang berat.
+   - Optimasi ACL: Data Role & Permission di-cache 24 jam dengan invalidasi saat ada perubahan.
+   - Optimasi Bank Soal: Caching pada Question, Group, dan Section untuk mempercepat proses pembuatan/pemuatan ujian.
+   - Optimasi Report: Caching pada hasil rekapitulasi nilai dan daftar peserta (TTL 5-10 menit).
+   - Penambahan header `X-Cache: HIT/MISS` pada semua endpoint yang terintegrasi cache.
+
+Timestamp: 2026-03-05 10:52:00
+
+LATEST UPDATES - 05 Maret 2026
+==============================
+
 1. OPTIMASI APLIKASI NODE.JS (APP-LEVEL) UNTUK VPS 1GB RAM:
    - Implementasi `compression` (Gzip) di Express untuk memperkecil ukuran payload API response (sangat membantu load data ujian yang besar).
    - Tuning Sequelize connection pool pada environment production: `max: 10`, `min: 2` (mengurangi overhead memori per koneksi DB).

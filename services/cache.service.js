@@ -87,11 +87,19 @@ async function clearByPattern(pattern) {
     let deletedCount = 0;
 
     do {
-      // SCAN dengan batchSize 100 agar tidak block event loop
-      const [nextCursor, keys] = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+      // ioredis keyPrefix tidak otomatis diterapkan pada argumen 'MATCH' di SCAN,
+      // jadi kita perlu menambahkannya secara manual jika ada.
+      const prefix = client.options.keyPrefix || '';
+      const effectivePattern = prefix + pattern;
+      
+      const [nextCursor, keys] = await client.scan(cursor, 'MATCH', effectivePattern, 'COUNT', 100);
       cursor = nextCursor;
 
       if (keys.length > 0) {
+        // ioredis otomatis membuang prefix saat menerima hasil SCAN jika keyPrefix diaktifkan,
+        // namun del() tetap membutuhkan key yang relatif terhadap prefix tersebut.
+        // Berdasarkan dokumentasi ioredis, del() akan otomatis menambah prefix lagi.
+        // Jadi kita kirim kunci apa adanya (yang sudah dipotong prefixnya oleh ioredis).
         await client.del(...keys);
         deletedCount += keys.length;
       }

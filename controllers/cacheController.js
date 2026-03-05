@@ -49,8 +49,8 @@ exports.getStatus = async (req, res, next) => {
     const total = hits + misses;
     const hitRate = total > 0 ? ((hits / total) * 100).toFixed(2) + '%' : 'N/A';
 
-    const memoryUsageBytes = parseInt(infoMap['used_memory'] || '0', 10);
-    const maxMemoryBytes = parseInt(infoMap['maxmemory'] || '0', 10);
+    // Ambil sample keys (max 100)
+    const [, keys] = await client.scan(0, 'COUNT', 100);
 
     return res.status(200).json({
       status: true,
@@ -61,6 +61,7 @@ exports.getStatus = async (req, res, next) => {
         redis_mode: infoMap['redis_mode'] || 'standalone',
         uptime_in_seconds: parseInt(infoMap['uptime_in_seconds'] || '0', 10),
         total_keys: totalKeys,
+        keys: keys.slice(0, 100), // Batasi 100 keys pertama
         memory: {
           used_memory_human: infoMap['used_memory_human'] || '0B',
           used_memory_bytes: memoryUsageBytes,
@@ -81,9 +82,24 @@ exports.getStatus = async (req, res, next) => {
           role: infoMap['role'] || 'unknown',
           connected_slaves: parseInt(infoMap['connected_slaves'] || '0', 10),
         },
-        recommendation: maxMemoryBytes === 0
-          ? '⚠️  maxmemory belum dikonfigurasi. Untuk VPS 1GB, rekomendasikan: maxmemory 128mb + maxmemory-policy allkeys-lru'
-          : '✅ maxmemory sudah dikonfigurasi.',
+        recommendations: [
+          {
+            key: 'Max Memory',
+            value: maxMemoryBytes === 0 ? 'Not Set' : infoMap['maxmemory_human'],
+            status: maxMemoryBytes === 0 ? 'warning' : 'optimal',
+            message: maxMemoryBytes === 0 
+              ? 'Penting: Batasi memori agar VPS 1GB tidak crash (OOM). Gunakan 128mb.' 
+              : 'Konfigurasi memori sudah aman.'
+          },
+          {
+            key: 'Eviction Policy',
+            value: infoMap['maxmemory_policy'] || 'noeviction',
+            status: infoMap['maxmemory_policy'] === 'allkeys-lru' ? 'optimal' : 'warning',
+            message: infoMap['maxmemory_policy'] === 'allkeys-lru' 
+              ? 'Kebijakan LRU aktif. Redis akan menghapus data lama otomatis jika penuh.' 
+              : 'Disarankan menggunakan allkeys-lru agar Redis tetap melayani request saat penuh.'
+          }
+        ]
       },
     });
   } catch (err) {

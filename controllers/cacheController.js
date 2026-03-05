@@ -52,6 +52,9 @@ exports.getStatus = async (req, res, next) => {
     // Ambil sample keys (max 100)
     const [, keys] = await client.scan(0, 'COUNT', 100);
 
+    const memoryUsageBytes = parseInt(infoMap['used_memory'] || '0', 10);
+    const maxMemoryBytes = parseInt(infoMap['maxmemory'] || '0', 10);
+
     return res.status(200).json({
       status: true,
       message: 'Redis cache status berhasil diambil.',

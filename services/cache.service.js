@@ -16,8 +16,10 @@ const MAX_CACHE_SIZE_BYTES = 512 * 1024;
  */
 async function getCache(key) {
   if (!isRedisReady()) return null;
+  const prefix = process.env.REDIS_PREFIX || '';
+  const fullKey = prefix + key;
   try {
-    const data = await client.get(key);
+    const data = await client.get(fullKey);
     if (data === null) {
       logger.debug(`[Cache] MISS key="${key}"`);
       return null;
@@ -41,15 +43,17 @@ async function setCache(key, value, ttl = 60) {
   if (!isRedisReady()) return false;
   try {
     const serialized = JSON.stringify(value);
+    const prefix = process.env.REDIS_PREFIX || '';
+    const fullKey = prefix + key;
 
     // Guard: jangan cache object yang terlalu besar
     if (serialized.length > MAX_CACHE_SIZE_BYTES) {
-      logger.warn(`[Cache] Skipped setCache: key="${key}" terlalu besar (${(serialized.length / 1024).toFixed(1)} KB > 512 KB)`);
+      logger.warn(`[Cache] Skipped setCache: key="${fullKey}" terlalu besar (${(serialized.length / 1024).toFixed(1)} KB > 512 KB)`);
       return false;
     }
 
-    await client.setex(key, ttl, serialized);
-    logger.debug(`[Cache] SET key="${key}" TTL=${ttl}s`);
+    await client.setex(fullKey, ttl, serialized);
+    logger.debug(`[Cache] SET key="${fullKey}" TTL=${ttl}s`);
     return true;
   } catch (err) {
     logger.error(`[Cache] setCache error for key="${key}": ${err.message}`);
@@ -64,9 +68,11 @@ async function setCache(key, value, ttl = 60) {
  */
 async function deleteCache(key) {
   if (!isRedisReady()) return false;
+  const prefix = process.env.REDIS_PREFIX || '';
+  const fullKey = prefix + key;
   try {
-    const result = await client.del(key);
-    logger.debug(`[Cache] DEL key="${key}" result=${result}`);
+    const result = await client.del(fullKey);
+    logger.debug(`[Cache] DEL key="${fullKey}" result=${result}`);
     return result > 0;
   } catch (err) {
     logger.error(`[Cache] deleteCache error for key="${key}": ${err.message}`);
@@ -87,19 +93,15 @@ async function clearByPattern(pattern) {
     let deletedCount = 0;
 
     do {
-      // ioredis keyPrefix tidak otomatis diterapkan pada argumen 'MATCH' di SCAN,
-      // jadi kita perlu menambahkannya secara manual jika ada.
-      const prefix = client.options.keyPrefix || '';
+      // Manual Prefixing: Gunakan prefix langsung di argumen MATCH
+      const prefix = process.env.REDIS_PREFIX || '';
       const effectivePattern = prefix + pattern;
       
       const [nextCursor, keys] = await client.scan(cursor, 'MATCH', effectivePattern, 'COUNT', 100);
       cursor = nextCursor;
 
       if (keys.length > 0) {
-        // ioredis otomatis membuang prefix saat menerima hasil SCAN jika keyPrefix diaktifkan,
-        // namun del() tetap membutuhkan key yang relatif terhadap prefix tersebut.
-        // Berdasarkan dokumentasi ioredis, del() akan otomatis menambah prefix lagi.
-        // Jadi kita kirim kunci apa adanya (yang sudah dipotong prefixnya oleh ioredis).
+        // Hapus kunci yang ditemukan (sudah mengandung prefix dari hasil SCAN)
         await client.del(...keys);
         deletedCount += keys.length;
       }
@@ -120,8 +122,10 @@ async function clearByPattern(pattern) {
  */
 async function getCacheTTL(key) {
   if (!isRedisReady()) return -2;
+  const prefix = process.env.REDIS_PREFIX || '';
+  const fullKey = prefix + key;
   try {
-    return await client.ttl(key);
+    return await client.ttl(fullKey);
   } catch (err) {
     logger.error(`[Cache] getCacheTTL error for key="${key}": ${err.message}`);
     return -2;

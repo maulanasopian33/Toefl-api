@@ -1,6 +1,17 @@
 LATEST UPDATES - 05 Maret 2026
 ==============================
 
+1. REFACTOR NAMESPACING CACHE (MANUAL PREFIXING)
+   - Mengubah mekanisme isolasi cache dari otomatis (fitur `keyPrefix` ioredis) menjadi manual di level `cache.service.js`.
+   - Memberikan transparansi penuh pada setiap kunci yang masuk ke Redis (membantu diagnosa jika ada data tercampur).
+   - Menjamin isolasi data antara TOAFL dan TOEFL tetap terjaga melalui prepending `REDIS_PREFIX` secara eksplisit pada setiap operasi (Set, Get, Del, Scan).
+   - Penambahan diagnostik `method: manual_prefixing` pada dashboard Cache Monitoring.
+
+Timestamp: 2026-03-05 12:55:00
+
+LATEST UPDATES - 05 Maret 2026
+==============================
+
 1. FINE-TUNING STRATEGI CACHE (TTL & INVALIDATION)
    - Penyesuaian TTL berdasarkan volatilitas data:
      - **Data Dinamis (3-5 Menit)**: Admin Stats, Reports, Audit Logs, dan Hasil Ujian (Results). Menyeimbangkan performa dashboard dengan aktualitas data.

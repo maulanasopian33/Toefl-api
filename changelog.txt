@@ -147,11 +147,19 @@ Timestamp: 2026-03-09 11:20:00
       - **HOTFIX DB**: Menghapus `FOREIGN KEY fk_scoring_details_section` pada tabel `scoring_details` dan memutus relasi Sequelize `belongsTo` agar kolom `section_category` bisa murni menyimpan string tag kategori (`listening`, `structure`, `reading`) tanpa terikat ketat ke ID spesifik tabel `sections`.
 
    G. DINAMISASI TEMPLATE SERTIFIKAT (JINJA TO DB MAPPING)
-      - **Database**: Ditambahkan kolom `mapping_data` (JSON) ke tabel `certificate_template_formats` untuk menyimpan pengaturan dinamis pemetaan variabel.
-      - **Frontend**: Merombak komponen form `TemplateModal.vue` dengan menambahkan tabel dinamis. Admin kini bisa menambah berapapun pemetaan antara "Format Kode di DOCX" (Jinja `{{...}}`) dengan "Variabel Data Database" (contoh: `participantName`).
-      - **Backend**: API Controller `saveTemplate` telah dimodifikasi agar bisa membaca, mem-parsing, dan menyimpan array mapping JSON ini dari request form-data.
+      - **Database**: Ditambahkan kolom `mapping_data` (JSON) ke tabel `certificate_template_formats`.
+      - **Frontend**: Merombak komponen form `TemplateModal.vue` dengan menambahkan tabel dinamis. Admin kini bisa menambah berapapun pemetaan variabel.
+      - **Backend**: API Controller `saveTemplate` dimodifikasi untuk menyimpan payload JSON mapping.
 
-Timestamp: 2026-03-09 14:15:00
+   H. SISTEM PANDUAN DINAMIS (DYNAMIC DOCS)
+      - **Database**: Membuat tabel `docs` baru untuk menyimpan artikel panduan Markdown.
+      - **Backend**: Implementasi `docsController` (CRUD + Slug Generator + Cache) dan `docsRoutes`.
+      - **Frontend Reader**: Merombak `/admin/support/docs` menjadi 3-panel reader dinamis dengan Grouping Kategori, Search, dan Markdown Rendering (XSS Safe).
+      - **Frontend Manager**: Membuat `/admin/support/docs-manager` untuk CRUD artikel dengan Split-Screen Markdown Editor.
+      - **Fix Otorisasi**: Memperbaiki error 403 pada POST docs dengan menyesuaikan role 'admin' sebagai pengelola dokumen.
+      - **Floating Guide v2**: Implementasi Global State (Pinia) agar panduan tetap terbuka saat pindah halaman, serta fitur "Minimize to Bubble" (mengecilkan panduan jadi tombol melayang).
+
+Timestamp: 2026-03-09 15:05:00
 
 LATEST UPDATES - 06 Maret 2026
 ==============================

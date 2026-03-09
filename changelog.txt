@@ -1,3 +1,82 @@
+LATEST UPDATES - 09 Maret 2026
+==============================
+
+1. PENGEMBANGAN FITUR ANALISIS HASIL TES (ANALYTICS DASHBOARD)
+   - Merancang dashboard analisis komprehensif untuk pengolahan data akademik secara profesional.
+   - Mengimplementasikan 6 halaman analisis utama di frontend (Vue/Nuxt):
+     a. Hasil Peserta (Participant Results)
+     b. Detail Jawaban (Answer Details)
+     c. Kualitas Soal (Question Quality - Difficulty Index)
+     d. Distribusi Opsi (Option Distribution - Distractor Analysis)
+     e. Progress Peserta (Participant Progress)
+     f. Statistik Batch (Batch Statistics)
+   - Mengembangkan API backend khusus (`/api/analytics`) terpusat pada `analyticsController.js`.
+   - Menggunakan optimasi query Sequelize dan perhitungan agregat DB untuk performa maksimal pada data besar.
+   - [BARU] Setiap analisis dilengkapi dengan fitur Export CSV native yang cepat.
+   - Menambahkan struktur navigasi tab pada Vue components dengan styling premium.
+   - File / library / fitur yang disentuh:
+     - node-be/app.js
+     - node-be/routes/analyticsRoutes.js
+     - node-be/controllers/analyticsController.js
+     - nuxt-fe/composables/useAnalytics.ts
+     - nuxt-fe/pages/admin/analytics/index.vue
+     - nuxt-fe/components/Analytics/*.vue
+
+Timestamp: 2026-03-09 09:20:00
+
+2. REORGANISASI UX DASHBOARD ANALITIK (SINGLE SOURCE OF TRUTH)
+   - Menggabungkan fungsionalitas Reports dan Results ke dalam satu halaman Analytics.
+   - Menyederhanakan Sidebar Navigation: Mengganti menu 'Results' dan 'Reports' dengan satu pintu masuk 'Analytics'.
+   - Pemetaan Role & Permission: Menggunakan permission `result.view_all` untuk rute `/admin/analytics`.
+   - Reorganisasi Tab di `/admin/analytics/index.vue` untuk alur dari Makro (Stats) ke Mikro (Detail):
+     a. Ringkasan Batch
+     b. Hasil Peserta (Pusat Aksi)
+     c. Kualitas Soal
+     d. Distribusi Opsi
+     e. Detail Jawaban
+     f. Riwayat Peserta
+   - Menambahkan aksi (action buttons) "Lihat Detail" dan "Riwayat Progress" pada tabel Hasil Peserta yang langsung menavigasi tab secara reaktif.
+   - File / library / fitur yang disentuh:
+     - nuxt-fe/data/navItems.ts
+     - nuxt-fe/components/Admin/Sidebar/index.vue
+     - nuxt-fe/pages/admin/analytics/index.vue
+     - nuxt-fe/components/Analytics/ParticipantResults.vue
+     - nuxt-fe/components/Analytics/AnswerDetails.vue
+     - nuxt-fe/components/Analytics/ParticipantProgress.vue
+
+3. IMPLEMENTASI RAPOR DIAGNOSTIK INDIVIDUAL (DIAGNOSTIC SCORE REPORT)
+   - Menambahkan fitur Rapor Diagnostik untuk memberikan analisis mendalam per peserta.
+   - Analisis meliputi:
+     - Pemetaan Level CEFR (A1 - C1) berdasarkan rentang total skor otomatis.
+     - Analisis Feedback Deskriptif yang menjelaskan kemampuan spesifik peserta.
+     - Radar Chart interaktif (menggunakan `apexcharts`) untuk membandingkan area kelemahan peserta dengan rata-rata nilai batch pada *section* yang sama.
+   - Membuat API Endpoint baru: `GET /api/analytics/diagnostic-report` dengan fitur *data caching* (10 menit) untuk mengurangi beban agregasi DB saat menghitung rata-rata batch.
+   - Mengintegrasikan aksi "Cetak Rapor" dengan print-friendly CSS.
+   - File / library / fitur yang disentuh:
+     - node-be/controllers/analyticsController.js
+     - node-be/routes/analyticsRoutes.js
+     - nuxt-fe/composables/useAnalytics.ts
+     - nuxt-fe/components/Analytics/DiagnosticReport.vue (BARU)
+     - nuxt-fe/pages/admin/analytics/index.vue
+     - nuxt-fe/components/Analytics/ParticipantResults.vue
+
+Timestamp: 2026-03-09 10:40:00
+
+LATEST UPDATES - 06 Maret 2026
+==============================
+
+1. PENGEMBANGAN PLUGIN OAUTH (ANT_OAUTH_PLUGIN)
+   - Analisis dan perancangan plugin OAuth modern & production-ready.
+   - Lokasi project baru: `D:\2026\node js\Plugin\ant_oauth_plugin`.
+   - Fitur Utama:
+     - Framework-agnostic core dengan middleware Express.js.
+     - Proteksi PKCE (S256) & State Validation (CSRF).
+     - Simple API: `oauth.login()`, `oauth.callback()`, `oauth.authenticate()`.
+     - Dukungan JWT & Session-based authentication.
+   - Delivery mencakup: Core logic, Middleware, Unit Tests, Example Server, dan Dokumentasi.
+
+Timestamp: 2026-03-06 13:40:00
+
 LATEST UPDATES - 05 Maret 2026
 ==============================
 

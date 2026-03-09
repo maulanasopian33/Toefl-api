@@ -14,6 +14,7 @@ module.exports = (sequelize, DataTypes) => {
       this.belongsTo(models.section, { foreignKey: "sectionId", as: "section" });
       this.belongsTo(models.question, { foreignKey: "questionId", as: "question" });
       this.belongsTo(models.option, { foreignKey: "optionId", as: "option" });
+      this.belongsTo(models.user, { foreignKey: "userId", as: "user" });
     }
   }
   useranswer.init({

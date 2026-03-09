@@ -144,11 +144,14 @@ Timestamp: 2026-03-09 11:20:00
    F. ARSITEKTUR KATEGORI SKORING CERDAS (Frontend & Backend)
       - Merombak UI `TableForm.vue` agar tab kategori tidak lagi memanggil ID dinamis dari database (yang menyebabkan UI kotor/banyak tab).
       - Kategori di hardcode menjadi 3 standar internasional: `listening` (Istima'), `structure` (Tarakib), `reading` (Qira'ah).
-      - Backend `resultService.js` diperbarui menggunakan **Multi-Language Regex Matcher**.
-      - Sistem akan mendeteksi otomatis nama sesi ujian peserta (contoh: "Istima", "Audio", "Qira'ah", "Tata Bahasa") dan memetakannya secara benar ke 3 kategori tabel skor tersebut, memungkinkan tabel dikonfigurasi satu kali untuk ribuan batch ujian.
       - **HOTFIX DB**: Menghapus `FOREIGN KEY fk_scoring_details_section` pada tabel `scoring_details` dan memutus relasi Sequelize `belongsTo` agar kolom `section_category` bisa murni menyimpan string tag kategori (`listening`, `structure`, `reading`) tanpa terikat ketat ke ID spesifik tabel `sections`.
 
-Timestamp: 2026-03-09 13:46:00
+   G. DINAMISASI TEMPLATE SERTIFIKAT (JINJA TO DB MAPPING)
+      - **Database**: Ditambahkan kolom `mapping_data` (JSON) ke tabel `certificate_template_formats` untuk menyimpan pengaturan dinamis pemetaan variabel.
+      - **Frontend**: Merombak komponen form `TemplateModal.vue` dengan menambahkan tabel dinamis. Admin kini bisa menambah berapapun pemetaan antara "Format Kode di DOCX" (Jinja `{{...}}`) dengan "Variabel Data Database" (contoh: `participantName`).
+      - **Backend**: API Controller `saveTemplate` telah dimodifikasi agar bisa membaca, mem-parsing, dan menyimpan array mapping JSON ini dari request form-data.
+
+Timestamp: 2026-03-09 14:15:00
 
 LATEST UPDATES - 06 Maret 2026
 ==============================

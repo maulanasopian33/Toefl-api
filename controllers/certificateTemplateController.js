@@ -74,6 +74,19 @@ exports.saveTemplate = async (req, res, next) => {
   const transaction = await db.sequelize.transaction();
   try {
     const { id, name, status } = req.body;
+    let mapping_data = null;
+    
+    // Parse mapping_data from multipart/form-data
+    if (req.body.mapping_data) {
+      try {
+        mapping_data = typeof req.body.mapping_data === 'string' 
+          ? JSON.parse(req.body.mapping_data) 
+          : req.body.mapping_data;
+      } catch (e) {
+        logger.warn('Failed to parse mapping_data JSON:', e.message);
+      }
+    }
+
     let fileDocx = req.file ? `/template/${req.file.filename}` : req.body.file_docx;
 
     let template;
@@ -111,6 +124,7 @@ exports.saveTemplate = async (req, res, next) => {
       await format.update({
         name: `Default Format for ${name}`,
         file_docx: fileDocx || format.file_docx,
+        mapping_data: mapping_data !== null ? mapping_data : format.mapping_data,
         is_active: true
       }, { transaction });
     } else {
@@ -119,6 +133,7 @@ exports.saveTemplate = async (req, res, next) => {
         templateId: template.id,
         name: `Default Format for ${name}`,
         file_docx: fileDocx || '',
+        mapping_data: mapping_data,
         is_active: true
       }, { transaction });
     }

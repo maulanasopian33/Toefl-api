@@ -239,29 +239,58 @@ function _calculateFinalScore(sectionScores, scoringType, config) {
     return initialScore + totalCorrect;
   }
 
-  // SCALE mode — Standard TOEFL PBT formula:
-  // FinalScore = round((sumOfConvertedSections × 10) / 3)
-  // This is exactly right for 3 sections. For N sections, we scale it:
-  // - If exactly 3 sections: standard formula
-  // - Otherwise: normalize to 3-section equivalent then apply standard multiplier
+  const examStandard = (config.exam_standard || 'TOEFL_PBT').toUpperCase();
+
+  // SCALE mode — Scoring Standard Logic
   const totalConverted = sections.reduce((sum, s) => sum + s.convertedScore, 0);
   const sectionCount = sections.length;
 
-  if (sectionCount === 0) return 310; // Minimum TOEFL score
-
-  let finalScore;
-  if (sectionCount === 3) {
-    // Standard TOEFL PBT formula
-    finalScore = Math.round((totalConverted * 10) / 3);
-  } else {
-    // Generalized: normalize to 3-section equivalent range
-    // Average converted score per section, then apply standard formula
-    const avgConverted = totalConverted / sectionCount;
-    finalScore = Math.round((avgConverted * 3 * 10) / 3);
+  if (sectionCount === 0) {
+    return examStandard === 'TOAFL' ? 0 : 310;
   }
 
-  // Clamp to valid TOEFL PBT range
-  return Math.max(310, Math.min(677, finalScore));
+  let finalScore;
+
+  if (examStandard === 'TOAFL') {
+    // TOAFL typically uses simple sum. Range: 0-900 (assuming 3 sections of 0-300)
+    finalScore = totalConverted;
+    return Math.max(0, Math.min(900, finalScore));
+  } else {
+    // Default: TOEFL PBT formula (standard 310 - 677)
+    // FinalScore = round((sumOfConvertedSections × 10) / 3)
+    if (sectionCount === 3) {
+      finalScore = Math.round((totalConverted * 10) / 3);
+    } else {
+      // Generalized for N sections
+      const avgConverted = totalConverted / sectionCount;
+      finalScore = Math.round((avgConverted * 3 * 10) / 3);
+    }
+    return Math.max(310, Math.min(677, finalScore));
+  }
+}
+
+// ------------------------------------------------------------
+// CORE CALCULATION: Mapping Score → CEFR Level
+// ------------------------------------------------------------
+function _calculateCEFRLevel(score, config = {}) {
+  const examStandard = (config.exam_standard || 'TOEFL_PBT').toUpperCase();
+
+  if (examStandard === 'TOAFL') {
+    // Estimasi TOAFL mapping (skala 0-900)
+    // Asumsi: proporsional terhadap TOAFL atau standard PTKIN lazimnya:
+    if (score >= 750) return 'C1';      // Mahir
+    if (score >= 600) return 'B2';      // Lanjut
+    if (score >= 450) return 'B1';      // Menengah
+    if (score >= 300) return 'A2';      // Dasar
+    return 'A1';                        // Pemula
+  } else {
+    // TOEFL PBT Standard mapping:
+    if (score >= 627) return 'C1';
+    if (score >= 543) return 'B2';
+    if (score >= 460) return 'B1';
+    if (score >= 337) return 'A2';
+    return 'A1';
+  }
 }
 
 // ============================================================

@@ -102,6 +102,47 @@ Timestamp: 2026-03-09 11:10:00
 
 Timestamp: 2026-03-09 11:20:00
 
+6. PENINGKATAN AKURASI & KUALITAS SISTEM PENILAIAN
+   A. FIX MULTI-ATTEMPT SCORING (`resultController.js`)
+      - `getResultsByUserAndBatch` sekarang meneruskan `result.id` (resultId) ke `getSectionScores`.
+      - Sebelumnya: SEMUA percobaan memiliki skor section yang sama (dari percobaan terbaru).
+      - Sesudahnya: Setiap percobaan menampilkan skor section yang sesuai menggunakan fast-path DB.
+   
+   B. FIX CACHE INVALIDATION SETELAH RECALCULATE (`resultController.js`)
+      - `recalculateBatch` sekarang ikut menghapus cache `batch_avg_sections_${batchId}` dan `diag:${batchId}:*`.
+      - Sebelumnya: Halaman analytics masih menampilkan rata-rata lama meski scoring sudah dihitung ulang.
+      - Ditambahkan log info setelah proses recalculate selesai.
+   
+   C. FIX CSV EXPORT — SANITIZE NAMA SECTION ARAB (`analyticsController.js`)
+      - Nama section berbahasa Arab (Istima', Qira'ah, Tarakib) kini di-strip karakter non-ASCII.
+      - Fallback otomatis ke `section_1`, `section_2` dst. jika nama section kosong setelah sanitasi.
+      - Kolom baru di CSV: `cefr_level` dan `passed` (Lulus/Tidak Lulus) — siap untuk laporan institusi.
+
+   D. DUKUNGAN UNTUK STANDAR PENILAIAN TOAFL (`resultService.js` & Frontend)
+      - Ditambahkan dukungan parameter `exam_standard` di konfigurasi batch (`scoring_config.exam_standard = 'TOAFL'`).
+      - Di Frontend Admin (Tambah/Edit Batch): Kini tersedia dropdown untuk memilih Standar Penilaian (TOEFL PBT / TOAFL) dan input khusus Batas Lulus (Passing Grade).
+      - Jika batch adalah TOAFL:
+        - Mode **SCALE**: Final skor = Jumlah dari nilai konversi section (maksimal 900), bukan dirata-rata lalu dikali 10/3 seperti TOEFL.
+        - **Level CEFR TOAFL**: Threshold berbeda dari TOEFL (A1 < 300, A2 >= 300, B1 >= 450, B2 >= 600, C1 >= 750).
+      - Default standar (TOEFL PBT) tetap tidak berubah jika config tidak diset.
+
+   - File yang disentuh:
+     - node-be/controllers/resultController.js
+     - node-be/controllers/analyticsController.js
+     - node-be/services/resultService.js
+     - node-be/tests/professional_scoring.test.js
+     - nuxt-fe/pages/admin/batch/add.vue
+     - nuxt-fe/pages/admin/batch/edit/[id].vue
+   - Unit Test: 23/23 LULUS ✅ (Termasuk 8 test baru khusus TOAFL)
+
+   E. FITUR GENERASI SKALA KONVERSI OTOMATIS (Frontend `TableForm.vue`)
+      - Ditambahkan tombol **Generate Otomatis** di halaman pembuatan/edit Tabel Penilaian (Skoring).
+      - Admin cukup memasukkan: Jumlah Total Soal (misal 50) & Skor Maksimal (misal 300).
+      - Sistem akan otomatis membuat deret angka skala proporsional (0 sampai 300).
+      - Tersedia opsi untuk mengedit hasil generate secara manual agar lebih fleksibel atau disesuaikan dengan kurva tertentu.
+
+Timestamp: 2026-03-09 13:10:00
+
 LATEST UPDATES - 06 Maret 2026
 ==============================
 

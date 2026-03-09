@@ -18,11 +18,21 @@ const CEFR_THRESHOLDS = [
   { min: 0,   max: 336, level: 'A1' },
 ];
 
-const mapCEFR = (score) => {
-  for (const range of CEFR_THRESHOLDS) {
-    if (score >= range.min && score <= range.max) return range.level;
+const mapCEFR = (score, config = {}) => {
+  const examStandard = (config.exam_standard || 'TOEFL_PBT').toUpperCase();
+
+  if (examStandard === 'TOAFL') {
+    if (score >= 750) return 'C1';
+    if (score >= 600) return 'B2';
+    if (score >= 450) return 'B1';
+    if (score >= 300) return 'A2';
+    return 'A1';
+  } else {
+    for (const range of CEFR_THRESHOLDS) {
+      if (score >= range.min && score <= range.max) return range.level;
+    }
+    return 'A1';
   }
-  return 'A1';
 };
 
 const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
@@ -39,19 +49,26 @@ const calculateFinalScore = (convertedSectionScores, scoringType, config = {}) =
     return initialScore + totalCorrect;
   }
 
+  const examStandard = (config.exam_standard || 'TOEFL_PBT').toUpperCase();
   const totalConverted = convertedSectionScores.reduce((sum, s) => sum + s.convertedScore, 0);
   const n = convertedSectionScores.length;
-  if (n === 0) return 310;
+
+  if (n === 0) return examStandard === 'TOAFL' ? 0 : 310;
 
   let score;
-  if (n === 3) {
-    score = Math.round((totalConverted * 10) / 3);
+  if (examStandard === 'TOAFL') {
+    score = totalConverted;
+    return clamp(score, 0, 900);
   } else {
-    // Generalized: normalize to 3-section equivalent
-    const avg = totalConverted / n;
-    score = Math.round((avg * 3 * 10) / 3);
+    if (n === 3) {
+      score = Math.round((totalConverted * 10) / 3);
+    } else {
+      // Generalized: normalize to 3-section equivalent
+      const avg = totalConverted / n;
+      score = Math.round((avg * 3 * 10) / 3);
+    }
+    return clamp(score, 310, 677);
   }
-  return clamp(score, 310, 677);
 };
 
 // ============================================================
@@ -83,6 +100,35 @@ describe('CEFR Mapping', () => {
     expect(mapCEFR(336)).toBe('A1');
     expect(mapCEFR(0)).toBe('A1');
     expect(mapCEFR(310)).toBe('A1');
+  });
+});
+
+describe('CEFR Mapping — TOAFL', () => {
+  const config = { exam_standard: 'TOAFL' };
+  
+  test('score >= 750 → C1', () => {
+    expect(mapCEFR(750, config)).toBe('C1');
+    expect(mapCEFR(900, config)).toBe('C1');
+  });
+
+  test('score 600–749 → B2', () => {
+    expect(mapCEFR(600, config)).toBe('B2');
+    expect(mapCEFR(749, config)).toBe('B2');
+  });
+
+  test('score 450–599 → B1', () => {
+    expect(mapCEFR(450, config)).toBe('B1');
+    expect(mapCEFR(599, config)).toBe('B1');
+  });
+
+  test('score 300–449 → A2', () => {
+    expect(mapCEFR(300, config)).toBe('A2');
+    expect(mapCEFR(449, config)).toBe('A2');
+  });
+
+  test('score < 300 → A1', () => {
+    expect(mapCEFR(299, config)).toBe('A1');
+    expect(mapCEFR(0, config)).toBe('A1');
   });
 });
 
@@ -131,6 +177,36 @@ describe('SCALE Scoring — Generalized N Sections', () => {
     );
     expect(result).toBe(600);
     expect(mapCEFR(600)).toBe('B2');
+  });
+});
+
+describe('TOAFL Scoring Mode', () => {
+  const config = { exam_standard: 'TOAFL' };
+
+  test('TOAFL: simple sum of converted scores', () => {
+    const result = calculateFinalScore(
+      [{ convertedScore: 250 }, { convertedScore: 200 }, { convertedScore: 180 }],
+      'SCALE',
+      config
+    );
+    expect(result).toBe(630); // 250 + 200 + 180 = 630
+    expect(mapCEFR(result, config)).toBe('B2');
+  });
+
+  test('TOAFL: clamped to 900 maximum', () => {
+    const result = calculateFinalScore(
+      [{ convertedScore: 300 }, { convertedScore: 310 }, { convertedScore: 300 }],
+      'SCALE',
+      config
+    );
+    expect(result).toBe(900); // 910 clamped to 900
+    expect(mapCEFR(result, config)).toBe('C1');
+  });
+
+  test('TOAFL: minimum score is 0', () => {
+    const result = calculateFinalScore([], 'SCALE', config);
+    expect(result).toBe(0);
+    expect(mapCEFR(result, config)).toBe('A1');
   });
 });
 

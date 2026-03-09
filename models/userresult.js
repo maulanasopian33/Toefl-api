@@ -21,6 +21,22 @@ module.exports = (sequelize, DataTypes) => {
     correctCount: DataTypes.INTEGER,
     wrongCount: DataTypes.INTEGER,
     score: DataTypes.INTEGER,
+    section_scores: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: null,
+      comment: 'Snapshot of per-section converted scores at time of calculation'
+    },
+    cefr_level: {
+      type: DataTypes.ENUM('A1', 'A2', 'B1', 'B2', 'C1', 'C2'),
+      allowNull: true,
+      defaultValue: null
+    },
+    passed: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: null
+    },
     status: {
       type: DataTypes.ENUM('PENDING', 'COMPLETED', 'FAILED'),
       defaultValue: 'PENDING'

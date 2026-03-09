@@ -67,6 +67,12 @@ module.exports = (sequelize, DataTypes) => {
     is_auto_paid: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
+    },
+    passing_score: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+      comment: 'Minimum total score required to pass / receive certificate. NULL = no threshold.'
     }
   }, {
     sequelize,

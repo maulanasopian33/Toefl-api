@@ -12,7 +12,7 @@ const {
 const { Op } = require('sequelize');
 const { jsonToCsv } = require('../utils/csvGenerator');
 const { getCache, setCache } = require('../services/cache.service');
-const { getSectionScores } = require('../services/resultService');
+const { getSectionScores, getCertificateData } = require('../services/resultService');
 
 const CACHE_TTL = 300; // 5 minutes
 
@@ -106,12 +106,23 @@ exports.getParticipantResults = async (req, res, next) => {
         };
         
         if (sectionScores) {
-          Object.keys(sectionScores).forEach(key => {
-            baseData[`section_${key.toLowerCase().replace(/\s+/g, '_')}`] = sectionScores[key];
+          Object.keys(sectionScores).forEach((key, idx) => {
+            // Sanitize: ASCII only, max 30 chars, prefix 'section_N_' jika nama non-ASCII
+            const sanitized = key
+              .normalize('NFKD')
+              .replace(/[^\x00-\x7F]/g, '')  // strip non-ASCII (Arabic, etc)
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '_')   // replace non-alphanum with _
+              .replace(/^_+|_+$/g, '')        // trim leading/trailing _
+              .substring(0, 30) || `section_${idx + 1}`; // fallback: section_1, section_2
+            baseData[`section_${sanitized}`] = sectionScores[key];
           });
         }
         
         baseData.total_score = r.score;
+        baseData.cefr_level = r.cefr_level || '-';
+        baseData.passed = r.passed !== null ? (r.passed ? 'Lulus' : 'Tidak Lulus') : '-';
         baseData.correct_answers = r.correctCount;
         baseData.wrong_answers = r.wrongCount;
         baseData.status = r.status;
@@ -374,7 +385,7 @@ exports.getBatchStatistics = async (req, res, next) => {
   }
 };
 
-// 7. Diagnostic Report (Individual Radar & CEFR)
+// 7. Diagnostic Report (Individual Radar & CEFR) — uses persisted section_scores
 exports.getDiagnosticReport = async (req, res, next) => {
   try {
     const { participantId, batchId } = req.query;
@@ -382,87 +393,78 @@ exports.getDiagnosticReport = async (req, res, next) => {
       return res.status(400).json({ status: false, message: 'participantId dan batchId wajib diisi.' });
     }
 
-    // 1. Get participant's result
-    const participantResult = await userresult.findOne({
-      where: { userId: participantId, batchId: batchId, status: 'COMPLETED' },
-      include: [
-        { model: user, as: 'user', attributes: ['uid', 'name', 'email'] },
-        { model: batch, as: 'batch', attributes: ['idBatch', 'name', 'scoring_type', 'scoring_config'] }
-      ]
-    });
+    // Use getCertificateData which handles fast-path (persisted) and recalculate fallback
+    const certData = await getCertificateData(participantId, batchId);
 
-    if (!participantResult) {
+    if (!certData) {
       return res.status(404).json({ status: false, message: 'Hasil ujian peserta tidak ditemukan atau belum selesai.' });
     }
 
-    const { scoring_type, scoring_config } = participantResult.batch;
-    
-    // Fetch individual scores
-    const participantScores = await getSectionScores(participantId, batchId, scoring_type, scoring_config);
-
-    // 2. Calculate Batch Average (Cached to prevent DB overload)
+    // Batch average (cached)
     const cacheKey = `batch_avg_sections_${batchId}`;
     let batchAverages = await getCache(cacheKey);
 
     if (!batchAverages) {
+      // Fetch all completed results and use persisted section_scores (fast, no recalculate)
       const allResults = await userresult.findAll({
-        where: { batchId: batchId, status: 'COMPLETED' },
-        attributes: ['userId']
+        where: { batchId, status: 'COMPLETED' },
+        attributes: ['section_scores']
       });
 
       const batchTotals = {};
-      let validParticipantCount = 0;
+      let validCount = 0;
 
-      // Sequential to avoid pool exhaustion for large batches
       for (const row of allResults) {
-        const scores = await getSectionScores(row.userId, batchId, scoring_type, scoring_config);
-        if (scores) {
-          validParticipantCount++;
-          for (const [section, score] of Object.entries(scores)) {
-            if (!batchTotals[section]) batchTotals[section] = 0;
-            batchTotals[section] += score;
+        if (row.section_scores && typeof row.section_scores === 'object') {
+          validCount++;
+          for (const [secName, secData] of Object.entries(row.section_scores)) {
+            if (!batchTotals[secName]) batchTotals[secName] = 0;
+            batchTotals[secName] += (secData.convertedScore || secData || 0);
           }
         }
       }
 
       batchAverages = {};
-      for (const [section, total] of Object.entries(batchTotals)) {
-        batchAverages[section] = Math.round(total / validParticipantCount);
+      if (validCount > 0) {
+        for (const [sec, total] of Object.entries(batchTotals)) {
+          batchAverages[sec] = Math.round(total / validCount);
+        }
       }
-      
-      // Cache for 10 minutes
       await setCache(cacheKey, batchAverages, 600);
     }
 
-    // 3. Construct Sections Data for Radar Chart
+    // Build section array for radar chart
     const sections = [];
-    for (const [section, score] of Object.entries(participantScores)) {
+    for (const [secName, secData] of Object.entries(certData.sectionScores)) {
+      const convertedScore = typeof secData === 'object' ? secData.convertedScore : secData;
       sections.push({
-        name: section,
-        score: score,
-        batchAverage: batchAverages[section] || 0,
+        name: secName,
+        score: convertedScore,
+        correct: typeof secData === 'object' ? secData.correct : 0,
+        total: typeof secData === 'object' ? secData.total : 0,
+        percentage: typeof secData === 'object' ? secData.percentage : 0,
+        batchAverage: batchAverages[secName] || 0
       });
     }
 
-    // 4. CEFR Mapping (Approximation based on standard TOEFL PBT/ITP)
-    const totalScore = participantResult.score;
-    let cefr = 'A1';
-    let feedback = 'Perlu pondasi tata bahasa dan kosa kata yang lebih solid.';
-    if (totalScore >= 627) { cefr = 'C1'; feedback = 'Sangat Berkembang. Anda mampu menggunakan bahasa Inggris kompleks dengan fasih.'; }
-    else if (totalScore >= 543) { cefr = 'B2'; feedback = 'Berkembang. Anda mampu berkomunikasi secara komprehensif di level akademik/profesional.'; }
-    else if (totalScore >= 460) { cefr = 'B1'; feedback = 'Cukup. Anda mengerti ide pokok dan konteks keseharian/pekerjaan.'; }
-    else if (totalScore >= 337) { cefr = 'A2'; feedback = 'Pemula Lanjut. Mulai tingkatkan perbendaharaan kata dan struktur kalimat kompleks.'; }
+    // CEFR Feedback
+    const CEFR_FEEDBACK = {
+      'C1': 'Sangat Berkembang. Anda mampu menggunakan bahasa Inggris kompleks dengan fasih dan presisi tinggi.',
+      'B2': 'Berkembang. Anda mampu berkomunikasi secara komprehensif di level akademik dan profesional.',
+      'B1': 'Cukup. Anda memahami ide pokok dan dapat berkomunikasi dalam konteks keseharian dan pekerjaan.',
+      'A2': 'Pemula Lanjut. Tingkatkan kosa kata dan kemampuan memahami struktur kalimat yang lebih kompleks.',
+      'A1': 'Dasar. Diperlukan pondasi yang lebih solid pada tata bahasa, kosa kata, dan kemampuan mendengarkan.',
+    };
 
+    const cefrLevel = certData.testSummary.cefrLevel;
     const reportData = {
-      participant: participantResult.user,
-      batch: participantResult.batch,
+      participant: certData.participant,
+      batch: certData.batch,
       testSummary: {
-        totalScore: totalScore,
-        testDate: participantResult.submittedAt,
-        cefrLevel: cefr,
-        feedback: feedback
+        ...certData.testSummary,
+        feedback: CEFR_FEEDBACK[cefrLevel] || CEFR_FEEDBACK['A1']
       },
-      sections: sections
+      sections
     };
 
     return res.status(200).json({ status: true, data: reportData });
@@ -470,3 +472,25 @@ exports.getDiagnosticReport = async (req, res, next) => {
     next(error);
   }
 };
+
+// 8. Certificate Data
+exports.getCertificateDataHandler = async (req, res, next) => {
+  try {
+    const { participantId, batchId, resultId } = req.query;
+    if (!participantId || !batchId) {
+      return res.status(400).json({ status: false, message: 'participantId dan batchId wajib diisi.' });
+    }
+
+    const certData = await getCertificateData(participantId, batchId, resultId || null);
+
+    if (!certData) {
+      return res.status(404).json({ status: false, message: 'Data sertifikat tidak ditemukan. Pastikan peserta sudah menyelesaikan ujian.' });
+    }
+
+    return res.status(200).json({ status: true, data: certData });
+  } catch (error) {
+    next(error);
+  }
+};
+
+

@@ -62,6 +62,46 @@ Timestamp: 2026-03-09 09:20:00
 
 Timestamp: 2026-03-09 10:40:00
 
+4. OVERHAUL SISTEM PENILAIAN PROFESIONAL (STANDAR TOEFL PBT/ITP)
+   - Analisis mendalam menemukan 5 bug kritis pada engine scoring lama.
+   - Menulis ulang `services/resultService.js` dengan Scoring Engine baru (standar ETS):
+     - Formula SCALE Standar untuk 3 section: `FinalScore = round((L + S + R) × 10 / 3)`.
+     - Untuk N section: normalisasi proporsional otomatis.
+     - Skor final di-clamp ke range 310–677 (range valid TOEFL PBT resmi).
+     - Hapus fallback hardcoded 20 → ganti estimasi proporsional + warning log.
+     - FIX MULTI-ATTEMPT: `getSectionScores` sekarang ketat menggunakan `resultId`.
+   - Penambahan 3 kolom baru pada `userresults` (via migrasi DB):
+     - `section_scores (JSON)`: snapshot skor per-section saat kalkulasi.
+     - `cefr_level (ENUM)`: level CEFR tersimpan otomatis (A1–C1).
+     - `passed (BOOLEAN)`: status kelulusan berdasarkan `passing_score` per batch.
+   - Penambahan `passing_score (INTEGER)` pada tabel `batches`.
+   - Fungsi baru `getCertificateData()` untuk data siap cetak sertifikat.
+   - Endpoint baru: `GET /api/analytics/certificate-data`.
+   - Migrasi database berjalan sukses (`npx sequelize-cli db:migrate`).
+   - Unit Test baru: `tests/professional_scoring.test.js` (15 uji, semua LULUS ✅).
+   - File yang disentuh:
+     - node-be/services/resultService.js (OVERHAUL TOTAL)
+     - node-be/models/userresult.js, batch.js
+     - node-be/controllers/analyticsController.js
+     - node-be/routes/analyticsRoutes.js
+     - node-be/migrations/20260309100000-add-section-scores-to-userresults.js (BARU)
+     - node-be/migrations/20260309100001-add-passing-score-to-batches.js (BARU)
+     - node-be/tests/professional_scoring.test.js (BARU)
+
+Timestamp: 2026-03-09 11:10:00
+
+5. BUGFIX: KOMPATIBILITAS FORMAT `section_scores` DI SEMUA HALAMAN
+   - Penyebab: `getSectionScores()` versi baru mengembalikan objek kaya `{correct, total, convertedScore}` bukan angka.
+   - Dampak: 3 halaman rusak — analytics (karakter JSON), batch results (kolom 0-9), detail results (teks JSON mentah).
+   - Fix Root Cause: `getSectionScores` di `resultService.js` sekarang **selalu** mengembalikan format flat `{ namaSection: convertedScore (number) }` baik dari fast-path (DB) maupun slow-path (recalculate).
+   - Fix FE Defensive: `ParticipantResults.vue`, `[batchId].vue`, dan `getSectionIcon` diperbarui dengan guard `typeof val === 'object'` untuk aman dari format apapun.
+   - File yang disentuh:
+     - node-be/services/resultService.js
+     - nuxt-fe/components/Analytics/ParticipantResults.vue
+     - nuxt-fe/pages/admin/results/[userId]/[batchId].vue
+
+Timestamp: 2026-03-09 11:20:00
+
 LATEST UPDATES - 06 Maret 2026
 ==============================
 

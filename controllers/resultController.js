@@ -4,6 +4,21 @@ const {
   calculateUserResult,
   getSectionScores
 } = require('../services/resultService');
+
+/**
+ * Normalize sectionScores: getSectionScores now returns rich objects.
+ * This ensures backward compat for pages expecting { sectionName: number } format.
+ * The rich format { correct, total, convertedScore, percentage } passes through as-is
+ * since FE now handles both formats defensively.
+ */
+const normalizeSectionScores = (sectionScores) => {
+  if (!sectionScores || typeof sectionScores !== 'object') return {};
+  // Already a flat number map? Pass through
+  const firstVal = Object.values(sectionScores)[0];
+  if (firstVal !== undefined && typeof firstVal === 'number') return sectionScores;
+  // Rich object: pass through as-is (FE handles both)
+  return sectionScores;
+};
 const { logger } = require('../utils/logger');
 const crypto = require('crypto');
 const { getCache, setCache, deleteCache, clearByPattern } = require('../services/cache.service');
@@ -178,11 +193,14 @@ exports.getResultsByUserAndBatch = async (req, res, next) => {
     });
 
     const resultsList = await Promise.all(userResults.map(async (result) => {
+      // PENTING: Selalu pass result.id agar getSectionScores mengambil skor
+      // yang benar untuk setiap percobaan (multi-attempt safe)
       const sectionScores = await getSectionScores(
         user.uid,
         batchId,
         result.batch.scoring_type,
-        result.batch.scoring_config
+        result.batch.scoring_config,
+        result.id   // ← resultId untuk akurasi multi-attempt
       );
 
       return {
@@ -505,11 +523,15 @@ exports.recalculateBatch = async (req, res, next) => {
       }
     }));
 
-    // 3. Clear Cache
+    // 3. Clear semua cache yang terkait dengan batch ini
     await Promise.all([
       clearByPattern(`${RESULT_CACHE_PREFIX}*`),
-      clearByPattern(`report:*`)
+      clearByPattern(`report:*`),
+      clearByPattern(`batch_avg_sections_${batchId}`),  // cache rata-rata batch di analytics
+      clearByPattern(`diag:${batchId}:*`),             // cache diagnostic report
     ]);
+
+    logger.info(`[RecalculateBatch] Selesai batch ${batchId}: ${summary.success} berhasil, ${summary.failed} gagal`);
 
     res.status(200).json({
       message: `Proses hitung ulang selesai untuk batch ${batchId}.`,

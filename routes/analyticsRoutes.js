@@ -15,5 +15,6 @@ router.get('/option-distribution', analyticsController.getOptionDistribution);
 router.get('/participant-progress', analyticsController.getParticipantProgress);
 router.get('/batch-statistics', analyticsController.getBatchStatistics);
 router.get('/diagnostic-report', analyticsController.getDiagnosticReport);
+router.get('/certificate-data', analyticsController.getCertificateDataHandler);
 
 module.exports = router;

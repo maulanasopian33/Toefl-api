@@ -5,7 +5,9 @@ module.exports = (sequelize, DataTypes) => {
     class scoringdetail extends Model {
         static associate(models) {
             this.belongsTo(models.scoringtable, { foreignKey: 'scoring_table_id', as: 'table' });
-            this.belongsTo(models.section, { foreignKey: 'section_category', targetKey: 'idSection', as: 'section' });
+            // Removed belongsTo sections association because section_category 
+            // is now a generic category string ('listening', 'structure', 'reading')
+            // rather than a strict foreign key to sections.idSection.
         }
     }
     scoringdetail.init({

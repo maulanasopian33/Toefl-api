@@ -141,7 +141,14 @@ Timestamp: 2026-03-09 11:20:00
       - Sistem akan otomatis membuat deret angka skala proporsional (0 sampai 300).
       - Tersedia opsi untuk mengedit hasil generate secara manual agar lebih fleksibel atau disesuaikan dengan kurva tertentu.
 
-Timestamp: 2026-03-09 13:10:00
+   F. ARSITEKTUR KATEGORI SKORING CERDAS (Frontend & Backend)
+      - Merombak UI `TableForm.vue` agar tab kategori tidak lagi memanggil ID dinamis dari database (yang menyebabkan UI kotor/banyak tab).
+      - Kategori di hardcode menjadi 3 standar internasional: `listening` (Istima'), `structure` (Tarakib), `reading` (Qira'ah).
+      - Backend `resultService.js` diperbarui menggunakan **Multi-Language Regex Matcher**.
+      - Sistem akan mendeteksi otomatis nama sesi ujian peserta (contoh: "Istima", "Audio", "Qira'ah", "Tata Bahasa") dan memetakannya secara benar ke 3 kategori tabel skor tersebut, memungkinkan tabel dikonfigurasi satu kali untuk ribuan batch ujian.
+      - **HOTFIX DB**: Menghapus `FOREIGN KEY fk_scoring_details_section` pada tabel `scoring_details` dan memutus relasi Sequelize `belongsTo` agar kolom `section_category` bisa murni menyimpan string tag kategori (`listening`, `structure`, `reading`) tanpa terikat ketat ke ID spesifik tabel `sections`.
+
+Timestamp: 2026-03-09 13:46:00
 
 LATEST UPDATES - 06 Maret 2026
 ==============================

@@ -51,13 +51,34 @@ const mapCEFR = (score) => {
 };
 
 // ------------------------------------------------------------
-// FALLBACK CATEGORY DETECTION
+// FALLBACK CATEGORY DETECTION (MULTI-LANGUAGE REGEX MATCHING)
 // ------------------------------------------------------------
+const CATEGORY_MATCHERS = [
+  {
+    category: 'listening',
+    regex: /(listen|dengar|istima|audio|suara|percakapan)/i
+  },
+  {
+    category: 'reading',
+    regex: /(read|baca|qira|teks|wacana|pemahaman|comprehension)/i
+  },
+  {
+    category: 'structure',
+    regex: /(struct|grammar|tata|tarakib|tata\s?bahasa|tulis|write|expression)/i
+  }
+];
+
 const getFallbackCategory = (sectionName) => {
-  if (!sectionName) return 'structure';
-  const name = sectionName.toLowerCase();
-  if (name.includes('listening')) return 'listening';
-  if (name.includes('reading')) return 'reading';
+  if (!sectionName) return 'structure'; // Default safe fallback
+  
+  // Test against all regex configurations
+  for (const matcher of CATEGORY_MATCHERS) {
+    if (matcher.regex.test(sectionName)) {
+      return matcher.category;
+    }
+  }
+
+  // If no match found, default to structure (most common middle ground)
   return 'structure';
 };
 

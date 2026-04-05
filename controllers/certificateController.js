@@ -1,154 +1,382 @@
-const db = require('../models');
-const { Op } = require('sequelize');
-const { logger } = require('../utils/logger');
-const { generateCertificatePdf } = require('../services/pdfService');
-const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
+'use strict';
+
+const db                  = require('../models');
+const { Op }              = require('sequelize');
+const fs                  = require('fs');
+const path                = require('path');
+const { logger }          = require('../utils/logger');
+const storageUtil         = require('../utils/storage');
+const { getCache, setCache, deleteCache } = require('../services/cache.service');
+const certService         = require('../services/certificateService');
+
+const CERT_CACHE_KEY_ALL    = 'cert:list:all';
+const CERT_CACHE_KEY_DETAIL = (id) => `cert:detail:${id}`;
+const CACHE_TTL             = 300; // 5 menit
+
+// =============================================================================
+// GENERATE — Single Participant
+// POST /certificates/generate/participant
+// =============================================================================
 
 /**
- * Menangani Callback dari Service Python
+ * Generate sertifikat untuk satu peserta (manual oleh admin).
+ * Body: { userResultId: number, templateFormatId?: number }
  */
-exports.handleCallback = async (req, res) => {
+exports.generateForParticipant = async (req, res, next) => {
   try {
-    const { original_data, result, status, timestamp } = req.body;
+    const { userResultId, templateFormatId } = req.body;
 
-    logger.info('PDF Service Callback received:', { status, timestamp });
-
-    if (status === 'success') {
-      const certificateNumber = original_data.certificate_number;
-      const downloadUrl = result.download_url;
-
-      logger.info(`Processing Certificate: ${certificateNumber}`);
-
-      // 1. Download PDF dari Python Service ke Local Storage Node.js
-      const pythonBaseUrl = process.env.PYTHON_SERVICE_BASE_URL || 'http://127.0.0.1:8000';
-      const fileUrl = downloadUrl.startsWith('http') ? downloadUrl : `${pythonBaseUrl}${downloadUrl}`;
-      
-      // === Use Storage Utility for paths and URLs ===
-      const storageUtil = require('../utils/storage');
-      
-      const CDN_CERT_SUBDIR = process.env.CDN_CERT_SUBDIR || 'storage/certificates';
-      const storageDir = storageUtil.ensureDir(CDN_CERT_SUBDIR);
-      const savePath = path.join(storageDir, fileName); // ensureDir returns absolute path
-
-      // URL publik yang disimpan ke DB
-      const publicPdfUrl = `${CDN_CERT_SUBDIR}/${fileName}`
-
-
-      // Stream download file
-      const response = await axios({
-        method: 'GET',
-        url: fileUrl,
-        responseType: 'stream'
+    if (!userResultId) {
+      return res.status(400).json({
+        status  : false,
+        message : 'userResultId wajib diisi.'
       });
-
-      const writer = fs.createWriteStream(savePath);
-      response.data.pipe(writer);
-
-      await new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
-      });
-
-      logger.info(`PDF downloaded and saved to: ${savePath}`);
-
-      // 2. Simpan Data ke Database
-      await db.certificate.upsert({
-        certificateNumber: certificateNumber,
-        name: original_data.name,
-        event: original_data.event,
-        date: original_data.date,
-        score: original_data.score,
-        qrToken: original_data.qr_token,
-        verifyUrl: original_data.verify_url,
-        pdfUrl: publicPdfUrl,
-        userId: original_data.user_id || null 
-      });
-
-      logger.info(`Certificate data saved to DB for ${certificateNumber}`);
-
-    } else {
-      logger.warn('PDF Generation reported failure via callback', req.body);
     }
 
-    res.status(200).json({ message: 'Callback processed' });
+    const { certificate, pdfUrl } = await certService.generateCertificate({
+      userResultId     : parseInt(userResultId, 10),
+      templateFormatId : templateFormatId ? parseInt(templateFormatId, 10) : null
+    });
+
+    // Invalidasi cache list
+    await deleteCache(CERT_CACHE_KEY_ALL);
+
+    res.status(200).json({
+      status  : true,
+      message : 'Sertifikat berhasil di-generate.',
+      data    : {
+        certificate,
+        pdfUrl
+      }
+    });
   } catch (error) {
-    logger.error('Error processing callback:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    logger.error('[CertController] generateForParticipant error:', error.message);
+    res.status(500).json({
+      status  : false,
+      message : error.message || 'Gagal generate sertifikat.'
+    });
   }
 };
 
+// =============================================================================
+// GENERATE — All Participants in a Batch
+// POST /certificates/generate/batch
+// =============================================================================
+
 /**
- * Test Trigger Generate PDF
+ * Generate sertifikat untuk seluruh peserta COMPLETED dalam satu batch.
+ * Body: { batchId: string, templateFormatId?: number }
  */
-exports.testGenerate = async (req, res) => {
+exports.generateForBatch = async (req, res, next) => {
   try {
-    // Mengambil data dari body request client, atau gunakan dummy data jika kosong
-    const dataToGenerate = req.body.data || req.body; 
-    
-    const serviceResponse = await generateCertificatePdf(dataToGenerate);
-    res.json({ message: 'Request sent to Python Service', service_response: serviceResponse });
+    const { batchId, templateFormatId } = req.body;
+
+    if (!batchId) {
+      return res.status(400).json({
+        status  : false,
+        message : 'batchId wajib diisi.'
+      });
+    }
+
+    const outcomes = await certService.generateBatchCertificates({
+      batchId,
+      templateFormatId : templateFormatId ? parseInt(templateFormatId, 10) : null
+    });
+
+    // Invalidasi cache list
+    await deleteCache(CERT_CACHE_KEY_ALL);
+
+    const successCount = outcomes.filter(o => o.success).length;
+    const failCount    = outcomes.filter(o => !o.success).length;
+
+    res.status(200).json({
+      status  : true,
+      message : `Generate selesai. Berhasil: ${successCount}, Gagal: ${failCount}.`,
+      data    : {
+        summary : { successCount, failCount, total: outcomes.length },
+        results : outcomes
+      }
+    });
   } catch (error) {
-    logger.error('Error requesting PDF generation:', error);
-    res.status(500).json({ error: 'Failed to request PDF generation' });
+    logger.error('[CertController] generateForBatch error:', error.message);
+    res.status(500).json({
+      status  : false,
+      message : error.message || 'Gagal generate sertifikat batch.'
+    });
   }
 };
 
-/**
- * Mengambil daftar sertifikat dengan filter dan pagination
- * GET /certificates
- */
-exports.getCertificates = async (req, res) => {
-  try {
-    const { page = 1, limit = 10, search = '', userId, event, startDate, endDate } = req.query;
-    const offset = (page - 1) * limit;
+// =============================================================================
+// LIST — Semua Sertifikat (Admin)
+// GET /certificates
+// =============================================================================
 
+/**
+ * Mengambil daftar sertifikat dengan filter dan pagination.
+ * Query: { page, limit, search, userId, batchId, startDate, endDate }
+ */
+exports.getCertificates = async (req, res, next) => {
+  try {
+    const {
+      page = 1, limit = 10,
+      search = '',
+      userId, batchId,
+      startDate, endDate
+    } = req.query;
+
+    const offset      = (parseInt(page, 10) - 1) * parseInt(limit, 10);
     const whereClause = {};
 
-    // Filter berdasarkan User ID (jika ada)
-    if (userId) {
-      whereClause.userId = userId;
-    }
+    if (userId)  whereClause.userId  = userId;
+    if (batchId) whereClause.batchId = batchId;
 
-    // Filter berdasarkan Event
-    if (event) {
-      whereClause.event = { [Op.like]: `%${event}%` };
-    }
-
-    // Filter berdasarkan Rentang Tanggal
     if (startDate && endDate) {
       whereClause.date = { [Op.between]: [startDate, endDate] };
     } else if (startDate) {
       whereClause.date = { [Op.gte]: startDate };
     }
 
-    // Pencarian (Search) pada Nama atau Nomor Sertifikat
     if (search) {
       whereClause[Op.or] = [
-        { name: { [Op.like]: `%${search}%` } },
-        { certificateNumber: { [Op.like]: `%${search}%` } }
+        { name              : { [Op.like]: `%${search}%` } },
+        { certificateNumber : { [Op.like]: `%${search}%` } },
+        { event             : { [Op.like]: `%${search}%` } }
       ];
     }
 
     const { count, rows } = await db.certificate.findAndCountAll({
-      where: whereClause,
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
-      order: [['createdAt', 'DESC']],
-      include: [{ model: db.user, as: 'user', attributes: ['name', 'email'] }]
+      where   : whereClause,
+      limit   : parseInt(limit, 10),
+      offset,
+      order   : [['createdAt', 'DESC']],
+      include : [
+        { model: db.user, as: 'user', attributes: ['name', 'email'] }
+      ]
     });
 
     res.status(200).json({
-      status: true,
-      message: 'Daftar sertifikat berhasil diambil.',
-      data: rows,
-      totalItems: count,
-      totalPages: Math.ceil(count / limit),
-      currentPage: parseInt(page, 10)
+      status      : true,
+      data        : rows,
+      totalItems  : count,
+      totalPages  : Math.ceil(count / parseInt(limit, 10)),
+      currentPage : parseInt(page, 10)
     });
   } catch (error) {
-    logger.error('Error fetching certificates:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    logger.error('[CertController] getCertificates error:', error);
+    next(error);
+  }
+};
+
+// =============================================================================
+// VIEW — Sertifikat Milik User Sendiri
+// GET /certificates/my/:userResultId
+// =============================================================================
+
+/**
+ * User melihat sertifikat miliknya berdasarkan userResultId.
+ */
+exports.getCertificateByUserResult = async (req, res, next) => {
+  try {
+    const { userResultId } = req.params;
+    const userId           = req.user?.uid;
+
+    const certificate = await db.certificate.findOne({
+      where: { userResultId: parseInt(userResultId, 10) }
+    });
+
+    if (!certificate) {
+      return res.status(404).json({
+        status  : false,
+        message : 'Sertifikat belum tersedia. Hubungi admin untuk generate sertifikat.'
+      });
+    }
+
+    // Pastikan hanya pemilik atau admin yang bisa akses
+    if (certificate.userId !== userId && req.user?.role !== 'admin') {
+      return res.status(403).json({
+        status  : false,
+        message : 'Akses ditolak.'
+      });
+    }
+
+    res.status(200).json({
+      status : true,
+      data   : certificate
+    });
+  } catch (error) {
+    logger.error('[CertController] getCertificateByUserResult error:', error);
+    next(error);
+  }
+};
+
+// =============================================================================
+// VERIFY — Verifikasi Publik via QR Token
+// GET /certificates/verify/:qrToken
+// =============================================================================
+
+/**
+ * Public endpoint untuk verifikasi sertifikat via QR code.
+ * Tidak memerlukan autentikasi.
+ */
+exports.verifyCertificate = async (req, res, next) => {
+  try {
+    const { qrToken } = req.params;
+
+    const cacheKey = `cert:verify:${qrToken}`;
+    const cached   = await getCache(cacheKey);
+    if (cached) {
+      return res.set('X-Cache', 'HIT').status(200).json(cached);
+    }
+
+    const certificate = await db.certificate.findOne({
+      where   : { qrToken },
+      include : [
+        { model: db.user, as: 'user', attributes: ['name', 'email'] }
+      ]
+    });
+
+    if (!certificate) {
+      return res.status(404).json({
+        status  : false,
+        message : 'Sertifikat tidak ditemukan atau token tidak valid.',
+        valid   : false
+      });
+    }
+
+    const response = {
+      status : true,
+      valid  : true,
+      data   : {
+        certificateNumber : certificate.certificateNumber,
+        name              : certificate.name,
+        event             : certificate.event,
+        date              : certificate.date,
+        score             : certificate.score,
+        verifyUrl         : certificate.verifyUrl,
+        issuedAt          : certificate.createdAt
+      }
+    };
+
+    // Cache verifikasi 30 menit
+    await setCache(cacheKey, response, 1800);
+    res.set('X-Cache', 'MISS').status(200).json(response);
+  } catch (error) {
+    logger.error('[CertController] verifyCertificate error:', error);
+    next(error);
+  }
+};
+
+// =============================================================================
+// DOWNLOAD — Stream PDF ke response
+// GET /certificates/download/:id
+// =============================================================================
+
+/**
+ * Download file PDF sertifikat.
+ */
+exports.downloadCertificate = async (req, res, next) => {
+  try {
+    const { id }    = req.params;
+    const userId    = req.user?.uid;
+
+    const certificate = await db.certificate.findByPk(id);
+
+    if (!certificate) {
+      return res.status(404).json({
+        status  : false,
+        message : 'Sertifikat tidak ditemukan.'
+      });
+    }
+
+    // Pastikan hanya pemilik atau admin yang bisa download
+    if (certificate.userId !== userId && req.user?.role !== 'admin') {
+      return res.status(403).json({
+        status  : false,
+        message : 'Akses ditolak.'
+      });
+    }
+
+    if (!certificate.pdfUrl) {
+      return res.status(404).json({
+        status  : false,
+        message : 'File PDF belum tersedia.'
+      });
+    }
+
+    // Resolve absolute path dari pdfUrl (relative path dari storage)
+    const relativePath = certificate.pdfUrl.startsWith('/')
+      ? certificate.pdfUrl.slice(1)
+      : certificate.pdfUrl;
+
+    const absolutePath = storageUtil.resolvePath(relativePath);
+
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({
+        status  : false,
+        message : 'File PDF tidak ditemukan di server.'
+      });
+    }
+
+    const fileName = `sertifikat-${certificate.certificateNumber}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    fs.createReadStream(absolutePath).pipe(res);
+  } catch (error) {
+    logger.error('[CertController] downloadCertificate error:', error);
+    next(error);
+  }
+};
+
+// =============================================================================
+// DELETE — Hapus Sertifikat (Admin)
+// DELETE /certificates/:id
+// =============================================================================
+
+/**
+ * Hapus record sertifikat dan file PDF-nya.
+ */
+exports.deleteCertificate = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const certificate = await db.certificate.findByPk(id);
+    if (!certificate) {
+      return res.status(404).json({
+        status  : false,
+        message : 'Sertifikat tidak ditemukan.'
+      });
+    }
+
+    // Hapus file PDF dari storage jika ada
+    if (certificate.pdfUrl) {
+      try {
+        const relativePath = certificate.pdfUrl.startsWith('/')
+          ? certificate.pdfUrl.slice(1)
+          : certificate.pdfUrl;
+        const absolutePath = storageUtil.resolvePath(relativePath);
+        if (fs.existsSync(absolutePath)) {
+          fs.unlinkSync(absolutePath);
+          logger.info(`[CertController] Deleted PDF file: ${absolutePath}`);
+        }
+      } catch (fsErr) {
+        logger.warn(`[CertController] Gagal hapus file PDF: ${fsErr.message}`);
+      }
+    }
+
+    await certificate.destroy();
+
+    // Invalidasi cache
+    await Promise.all([
+      deleteCache(CERT_CACHE_KEY_ALL),
+      deleteCache(CERT_CACHE_KEY_DETAIL(id))
+    ]);
+
+    res.status(200).json({
+      status  : true,
+      message : 'Sertifikat berhasil dihapus.'
+    });
+  } catch (error) {
+    logger.error('[CertController] deleteCertificate error:', error);
+    next(error);
   }
 };

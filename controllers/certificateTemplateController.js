@@ -1,10 +1,10 @@
 const db = require('../models');
 const { logger } = require('../utils/logger');
-const { getCache, setCache, deleteCache } = require('../services/cache.service');
+const { getCache, setCache, deleteCache, clearByPattern } = require('../services/cache.service');
 
-const CERT_CACHE_KEY_ALL = 'cert:template:all';
+const CERT_CACHE_KEY_ALL    = 'cert:template:all';
 const CERT_CACHE_KEY_DETAIL = (id) => `cert:template:detail:${id}`;
-const CACHE_TTL = 3600; // 1 jam
+const CACHE_TTL             = 3600; // 1 jam
 
 /**
  * Get all certificate templates with their formats
@@ -68,82 +68,125 @@ exports.getTemplateById = async (req, res, next) => {
 };
 
 /**
- * Create or Update Template (Simplified for single file upload)
+ * Get the currently active template format (single global active).
+ * GET /certificate-templates/active
+ */
+exports.getActiveTemplate = async (req, res, next) => {
+  try {
+    const cacheKey = 'cert:template:active';
+    const cached   = await getCache(cacheKey);
+    if (cached) {
+      return res.set('X-Cache', 'HIT').status(200).json(cached);
+    }
+
+    const format = await db.certificate_template_format.findOne({
+      where   : { is_active: true },
+      include : [{ model: db.certificate_template, as: 'template' }]
+    });
+
+    if (!format) {
+      return res.status(404).json({
+        status  : false,
+        message : 'Tidak ada template aktif saat ini.'
+      });
+    }
+
+    const response = { status: true, data: format };
+    await setCache(cacheKey, response, CACHE_TTL);
+    res.set('X-Cache', 'MISS').status(200).json(response);
+  } catch (error) {
+    logger.error('Error fetching active template:', error);
+    next(error);
+  }
+};
+
+/**
+ * Create or Update Template.
+ * Mendukung:
+ *   - Upload file PDF base template (via multipart)
+ *   - Simpan nexaplot_config (NXCFG-...) string dari designer
+ *   - Simpan mapping_data variabel
+ *   - Jika is_active = true, auto-deactivate semua template format lain
  */
 exports.saveTemplate = async (req, res, next) => {
   const transaction = await db.sequelize.transaction();
   try {
-    const { id, name, status } = req.body;
+    const { id, name, status, nexaplot_config } = req.body;
+
+    // Parse mapping_data dari multipart/form-data atau JSON
     let mapping_data = null;
-    
-    // Parse mapping_data from multipart/form-data
     if (req.body.mapping_data) {
       try {
-        mapping_data = typeof req.body.mapping_data === 'string' 
-          ? JSON.parse(req.body.mapping_data) 
+        mapping_data = typeof req.body.mapping_data === 'string'
+          ? JSON.parse(req.body.mapping_data)
           : req.body.mapping_data;
       } catch (e) {
         logger.warn('Failed to parse mapping_data JSON:', e.message);
       }
     }
 
-    let fileDocx = req.file ? `/template/${req.file.filename}` : req.body.file_docx;
+    // Tangani upload file PDF
+    const filePdf = req.file ? `template/${req.file.filename}` : (req.body.file_pdf || null);
 
+    // ── Upsert certificate_template (parent) ──────────────────────────────
     let template;
+    const isActive = status === 'true' || status === true;
+
     if (id) {
-      // Update
       template = await db.certificate_template.findByPk(id);
       if (!template) {
         await transaction.rollback();
-        return res.status(404).json({ status: false, message: 'Template not found' });
+        return res.status(404).json({ status: false, message: 'Template tidak ditemukan.' });
       }
-      await template.update({ 
-        name, 
-        status: status === 'true' || status === true 
-      }, { transaction });
+      await template.update({ name, status: isActive }, { transaction });
     } else {
-      // Create
-      template = await db.certificate_template.create({ 
-        name, 
-        status: status === 'true' || status === true 
-      }, { transaction });
+      template = await db.certificate_template.create(
+        { name, status: isActive },
+        { transaction }
+      );
     }
 
-    // Simplified Formats (Always ensure at least one format exists with the uploaded file)
-    // We treat this as a single-template-single-file system for the user, 
-    // but keep the DB structure for compatibility.
-    
-    // Check if format already exists for this template
+    // ── Jika is_active = true, deactivate semua format lain dulu ──────────
+    if (isActive) {
+      await db.certificate_template_format.update(
+        { is_active: false },
+        { where: {}, transaction }  // semua format
+      );
+    }
+
+    // ── Upsert certificate_template_format (child) ────────────────────────
     let format = await db.certificate_template_format.findOne({
       where: { templateId: template.id },
       transaction
     });
 
+    const formatPayload = {
+      name             : `Format ${name}`,
+      is_active        : isActive,
+      // Update nexaplot_config jika dikirim
+      ...(nexaplot_config ? { nexaplot_config } : {}),
+      // Update file PDF jika ada file baru yang di-upload
+      ...(filePdf        ? { file_pdf         : filePdf } : {}),
+      // Update mapping_data jika dikirim
+      ...(mapping_data !== null ? { mapping_data } : {})
+    };
+
     if (format) {
-      // Update existing format
-      await format.update({
-        name: `Default Format for ${name}`,
-        file_docx: fileDocx || format.file_docx,
-        mapping_data: mapping_data !== null ? mapping_data : format.mapping_data,
-        is_active: true
-      }, { transaction });
+      await format.update(formatPayload, { transaction });
     } else {
-      // Create default format
-      await db.certificate_template_format.create({
-        templateId: template.id,
-        name: `Default Format for ${name}`,
-        file_docx: fileDocx || '',
-        mapping_data: mapping_data,
-        is_active: true
-      }, { transaction });
+      await db.certificate_template_format.create(
+        { templateId: template.id, ...formatPayload },
+        { transaction }
+      );
     }
 
     await transaction.commit();
 
-    // Invalidasi cache sertifikat
+    // Invalidasi cache
     await Promise.all([
       deleteCache(CERT_CACHE_KEY_ALL),
-      deleteCache(CERT_CACHE_KEY_DETAIL(template.id))
+      deleteCache(CERT_CACHE_KEY_DETAIL(template.id)),
+      deleteCache('cert:template:active')
     ]);
 
     const result = await db.certificate_template.findByPk(template.id, {
@@ -151,9 +194,9 @@ exports.saveTemplate = async (req, res, next) => {
     });
 
     res.status(200).json({
-      status: true,
-      message: 'Template berhasil disimpan',
-      data: result
+      status  : true,
+      message : 'Template berhasil disimpan.',
+      data    : result
     });
   } catch (error) {
     await transaction.rollback();

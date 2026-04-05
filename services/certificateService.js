@@ -1,0 +1,340 @@
+'use strict';
+
+const fs           = require('fs');
+const path         = require('path');
+const { v4: uuidv4 } = require('uuid');
+const db           = require('../models');
+const storageUtil  = require('../utils/storage');
+const { logger }   = require('../utils/logger');
+
+// Lazy-load nexaplot dan pdf-lib agar tidak crash jika modul belum ready
+let NexaplotEngine = null;
+let pdfLib         = null;
+
+function getEngine() {
+  if (!NexaplotEngine) NexaplotEngine = require('nexaplot');
+  if (!pdfLib)         pdfLib         = require('pdf-lib');
+  return { NexaplotEngine, pdfLib };
+}
+
+const LICENSE_KEY = process.env.NEXAPLOT_LICENSE_KEY || '';
+
+// =============================================================================
+// HELPER: Resolve nilai dari data context berdasarkan dotted source path
+// =============================================================================
+
+/**
+ * Resolve nilai dari nested object berdasarkan dotted key path.
+ * Contoh: resolveValue("detailuser.namaLengkap", ctx) → "Budi Santoso"
+ * Mengembalikan '' jika path tidak ditemukan.
+ * @param {string} sourcePath
+ * @param {object} ctx
+ * @returns {any}
+ */
+function resolveValue(sourcePath, ctx) {
+  if (!sourcePath || !ctx) return '';
+  const keys = sourcePath.split('.');
+  let val = ctx;
+  for (const k of keys) {
+    if (val === null || val === undefined) return '';
+    val = val[k];
+  }
+  return val !== undefined && val !== null ? val : '';
+}
+
+// =============================================================================
+// HELPER: Build userData dari mapping_data + data context
+// =============================================================================
+
+/**
+ * Build userData object untuk dikirim ke nexaplot engine.
+ * mapping_data: Array<{ variable: string, source: string, type: string }>
+ * ctx: object data context peserta
+ * @param {Array} mappingData
+ * @param {object} ctx
+ * @returns {object} userData
+ */
+function buildUserData(mappingData, ctx) {
+  const userData = {};
+  if (!Array.isArray(mappingData)) return userData;
+
+  for (const mapping of mappingData) {
+    const { variable, source, type } = mapping;
+    if (!variable || !source) continue;
+
+    // Special case: "section_scores_table" → array for tipe table
+    if (source === 'section_scores_table') {
+      const sectionScores = ctx.section_scores || {};
+      userData[variable] = Object.entries(sectionScores).map(([section, score]) => ({
+        section,
+        score: typeof score === 'number' ? score : String(score)
+      }));
+    } else {
+      userData[variable] = resolveValue(source, ctx);
+    }
+  }
+
+  return userData;
+}
+
+// =============================================================================
+// MAIN: Generate sertifikat untuk 1 peserta
+// =============================================================================
+
+/**
+ * Generate sertifikat untuk satu userresult.
+ * @param {object} params
+ * @param {number} params.userResultId - ID dari tabel userresults
+ * @param {number|null} params.templateFormatId - Opsional, jika null gunakan template aktif
+ * @returns {Promise<{ certificate: object, pdfUrl: string }>}
+ */
+async function generateCertificate({ userResultId, templateFormatId = null }) {
+  // ── 1. Ambil data hasil ujian + user ──────────────────────────────────────
+  const userResult = await db.userresult.findByPk(userResultId, {
+    include: [
+      {
+        model: db.user,
+        as: 'user',
+        include: [{ model: db.detailuser }]
+      },
+      {
+        model: db.batch,
+        as: 'batch'
+      }
+    ]
+  });
+
+  if (!userResult) {
+    throw new Error(`UserResult dengan ID ${userResultId} tidak ditemukan.`);
+  }
+
+  // ── 2. Ambil template format (aktif atau spesifik) ─────────────────────────
+  let format;
+  if (templateFormatId) {
+    format = await db.certificate_template_format.findByPk(templateFormatId, {
+      include: [{ model: db.certificate_template, as: 'template' }]
+    });
+    if (!format) {
+      throw new Error(`Template format dengan ID ${templateFormatId} tidak ditemukan.`);
+    }
+  } else {
+    format = await db.certificate_template_format.findOne({
+      where: { is_active: true },
+      include: [{ model: db.certificate_template, as: 'template' }]
+    });
+    if (!format) {
+      throw new Error('Tidak ada template aktif. Aktifkan template terlebih dahulu.');
+    }
+  }
+
+  if (!format.nexaplot_config) {
+    throw new Error(
+      `Template "${format.name}" belum memiliki konfigurasi desain (nexaplot_config). ` +
+      'Buka editor desain dan simpan layout terlebih dahulu.'
+    );
+  }
+
+  if (!format.file_pdf) {
+    throw new Error(
+      `Template "${format.name}" belum memiliki file PDF base template.`
+    );
+  }
+
+  // ── 3. Siapkan data context peserta ──────────────────────────────────────
+  const detailUser    = userResult.user?.detailuser || {};
+  const sectionScores = (() => {
+    try {
+      const raw = userResult.section_scores;
+      return typeof raw === 'string' ? JSON.parse(raw) : (raw || {});
+    } catch (_) {
+      return {};
+    }
+  })();
+
+  // Generate token unik dan nomor sertifikat
+  const qrToken    = uuidv4();
+  const appUrl     = (process.env.APP_URL || '').replace(/\/+$/, '');
+  const verifyUrl  = `${appUrl}/verify/${qrToken}`;
+  const certNumber = `CERT-${userResult.batchId || 'BATCH'}-${userResultId}-${Date.now()}`;
+
+  const ctx = {
+    detailuser: {
+      namaLengkap : detailUser.namaLengkap || '',
+      nim         : detailUser.nim         || '',
+      fakultas    : detailUser.fakultas    || '',
+      prodi       : detailUser.prodi       || ''
+    },
+    user: {
+      name        : userResult.user?.name    || '',
+      email       : userResult.user?.email   || '',
+      picture     : userResult.user?.picture || ''
+    },
+    userresult: {
+      score           : userResult.score          || 0,
+      cefr_level      : userResult.cefr_level     || '',
+      passed          : userResult.passed ? 'Lulus' : 'Tidak Lulus',
+      totalQuestions  : userResult.totalQuestions  || 0,
+      correctCount    : userResult.correctCount    || 0,
+      submittedAt     : userResult.submittedAt
+        ? new Date(userResult.submittedAt).toLocaleDateString('id-ID', {
+            day: '2-digit', month: 'long', year: 'numeric'
+          })
+        : ''
+    },
+    batch: {
+      name  : userResult.batch?.name   || '',
+      type  : userResult.batch?.type   || '',
+      date  : userResult.batch?.start_date
+        ? new Date(userResult.batch.start_date).toLocaleDateString('id-ID', {
+            day: '2-digit', month: 'long', year: 'numeric'
+          })
+        : ''
+    },
+    section_scores       : sectionScores,
+    section_scores_table : Object.entries(sectionScores).map(([section, score]) => ({
+      section,
+      score: typeof score === 'number' ? score : String(score)
+    })),
+    certificate: {
+      number    : certNumber,
+      verifyUrl : verifyUrl,
+      date      : new Date().toLocaleDateString('id-ID', {
+        day: '2-digit', month: 'long', year: 'numeric'
+      })
+    }
+  };
+
+  // ── 4. Build userData dari mapping_data ───────────────────────────────────
+  const mappingData = (() => {
+    try {
+      const raw = format.mapping_data;
+      return Array.isArray(raw) ? raw : (typeof raw === 'string' ? JSON.parse(raw) : []);
+    } catch (_) {
+      return [];
+    }
+  })();
+
+  const userData = buildUserData(mappingData, ctx);
+
+  // Pastikan variabel QR selalu menggunakan verifyUrl yang baru di-generate
+  for (const mapping of mappingData) {
+    if (mapping.type === 'qr') {
+      userData[mapping.variable] = verifyUrl;
+    }
+  }
+
+  logger.info(`[CertService] Generating certificate for userResultId=${userResultId}, template="${format.name}"`);
+  logger.info(`[CertService] userData keys: ${Object.keys(userData).join(', ')}`);
+
+  // ── 5. Baca PDF template dari storage ────────────────────────────────────
+  const templatePath = storageUtil.resolvePath(format.file_pdf);
+  if (!fs.existsSync(templatePath)) {
+    throw new Error(
+      `File PDF template tidak ditemukan di path: ${templatePath}. ` +
+      'Pastikan file sudah di-upload dengan benar.'
+    );
+  }
+  const templateBuffer = fs.readFileSync(templatePath);
+
+  // ── 6. Generate PDF via nexaplot engine ──────────────────────────────────
+  const { NexaplotEngine: Engine, pdfLib: pLib } = getEngine();
+  const engine   = new Engine(pLib, LICENSE_KEY);
+  const pdfBytes = await engine.generate(templateBuffer, format.nexaplot_config, userData);
+
+  // ── 7. Simpan file PDF ke storage ─────────────────────────────────────────
+  const fileName  = `cert-${qrToken}.pdf`;
+  const certDir   = storageUtil.ensureDir('storage/certificates');
+  const savePath  = path.join(certDir, fileName);
+  fs.writeFileSync(savePath, Buffer.from(pdfBytes));
+  const publicUrl = storageUtil.getPublicUrl(`storage/certificates/${fileName}`);
+
+  logger.info(`[CertService] PDF saved to: ${savePath}`);
+
+  // ── 8. Upsert record ke tabel certificates ────────────────────────────────
+  const [certificate] = await db.certificate.upsert({
+    certificateNumber : certNumber,
+    userId            : userResult.userId,
+    name              : detailUser.namaLengkap || userResult.user?.name || '',
+    event             : userResult.batch?.name || '',
+    date              : new Date(),
+    score             : userResult.score || 0,
+    qrToken           : qrToken,
+    verifyUrl         : verifyUrl,
+    pdfUrl            : publicUrl,
+    batchId           : userResult.batchId,
+    userResultId      : userResultId,
+    templateFormatId  : format.id,
+    generated_data    : { userData, mappingData }
+  });
+
+  logger.info(`[CertService] Certificate record upserted: ${certNumber}`);
+
+  return { certificate, pdfUrl: publicUrl };
+}
+
+// =============================================================================
+// BATCH: Generate sertifikat untuk semua peserta dalam 1 batch
+// =============================================================================
+
+/**
+ * Generate sertifikat untuk semua peserta yang sudah COMPLETED dalam satu batch.
+ * @param {object} params
+ * @param {string} params.batchId
+ * @param {number|null} params.templateFormatId
+ * @returns {Promise<Array<{ userResultId, success, pdfUrl?, error? }>>}
+ */
+async function generateBatchCertificates({ batchId, templateFormatId = null }) {
+  const results = await db.userresult.findAll({
+    where: { batchId, status: 'COMPLETED' }
+  });
+
+  if (results.length === 0) {
+    throw new Error(
+      `Tidak ada peserta dengan status COMPLETED untuk batch ${batchId}.`
+    );
+  }
+
+  logger.info(`[CertService] Starting batch generate for batchId=${batchId}, total=${results.length} peserta`);
+
+  const outcomes = [];
+  for (const r of results) {
+    try {
+      const out = await generateCertificate({
+        userResultId    : r.id,
+        templateFormatId
+      });
+      outcomes.push({
+        userResultId : r.id,
+        userId       : r.userId,
+        success      : true,
+        pdfUrl       : out.pdfUrl
+      });
+    } catch (err) {
+      logger.error(`[CertService] Error generating for userResultId=${r.id}: ${err.message}`);
+      outcomes.push({
+        userResultId : r.id,
+        userId       : r.userId,
+        success      : false,
+        error        : err.message
+      });
+    }
+  }
+
+  const successCount = outcomes.filter(o => o.success).length;
+  const failCount    = outcomes.filter(o => !o.success).length;
+  logger.info(`[CertService] Batch done. Success: ${successCount}, Failed: ${failCount}`);
+
+  return outcomes;
+}
+
+// =============================================================================
+// EXPORTS
+// =============================================================================
+
+module.exports = {
+  generateCertificate,
+  generateBatchCertificates,
+  // Export helpers untuk unit testing
+  resolveValue,
+  buildUserData
+};

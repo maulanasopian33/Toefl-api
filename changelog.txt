@@ -1,3 +1,74 @@
+LATEST UPDATES - 05 April 2026
+==============================
+
+1. IMPLEMENTASI SISTEM GENERATE SERTIFIKAT PDF (NEXAPLOT ENGINE)
+   - Merancang dan mengimplementasikan sistem generate sertifikat PDF 3-alur:
+     Alur 1: Save Template PDF (upload base PDF + konfigurasi desain nexaplot)
+     Alur 2: Generate Sertifikat (manual oleh admin, per peserta atau per batch)
+     Alur 3: View & Verifikasi Hasil Sertifikat (download, verifikasi QR publik)
+
+   A. DATABASE (2 MIGRASI BARU):
+      - `20260405000001-update-template-format-to-pdf.js`: Rename kolom `file_docx` → `file_pdf`,
+        tambah kolom `nexaplot_config (TEXT LONG)` untuk menyimpan NXCFG-... string dari NexaplotEditor.
+      - `20260405000002-add-relations-to-certificates.js`: Tambah kolom `batchId`, `userResultId`,
+        `templateFormatId`, `generated_data (JSON)` ke tabel `certificates`.
+
+   B. MODEL UPDATE:
+      - `models/certificate_template_format.js`: Update kolom `file_pdf`, tambah `nexaplot_config`,
+        update komentar `mapping_data` format baru (array {variable, source, type, label}).
+      - `models/certificate.js`: Tambah kolom baru + asosiasi `belongsTo userresult`.
+
+   C. SERVICE BARU — `services/certificateService.js`:
+      - Core engine generate PDF menggunakan `NexaplotEngine` dari package `nexaplot`.
+      - `resolveValue(source, ctx)`: Resolve nilai nested dari data context berdasarkan dotted path.
+      - `buildUserData(mappingData, ctx)`: Build object data untuk dikirim ke nexaplot.generate().
+        Support special source `section_scores_table` (type table → Array of Objects).
+      - `generateCertificate({ userResultId, templateFormatId? })`: Generate sertifikat 1 peserta.
+        Flow: ambil userresult → cari template aktif → build userData → nexaplot.generate() →
+        simpan PDF ke storage/certificates/ → upsert record ke DB certificates.
+      - `generateBatchCertificates({ batchId, templateFormatId? })`: Generate semua peserta COMPLETED
+        dalam satu batch, mengembalikan summary { success/fail per peserta }.
+      - QR token di-generate otomatis (uuid v4), verifyUrl = APP_URL/verify/:token.
+      - Dependency baru: `nexaplot`, `pdf-lib`, `qrcode`.
+
+   D. CONTROLLER UPDATE:
+      - `controllers/certificateController.js`: Rewrite total, hapus Python Service dependency.
+        7 fungsi baru: generateForParticipant, generateForBatch, getCertificates,
+        getCertificateByUserResult, verifyCertificate, downloadCertificate, deleteCertificate.
+      - `controllers/certificateTemplateController.js`: Tambah fungsi `getActiveTemplate` (dengan cache),
+        update `saveTemplate`: terima nexaplot_config, handle file_pdf, auto-deactivate template lain
+        saat is_active = true (single active enforcement).
+
+   E. ROUTES:
+      - `routes/certificateRoutes.js` (BARU): Public /verify/:qrToken, Auth user /my/,
+        Admin generate, list, delete.
+      - `routes/certificateTemplateRoutes.js` (UPDATE): Multer filter ganti .docx → .pdf,
+        tambah route GET /active dan POST /:id/config (simpan nexaplot_config dari designer).
+      - `app.js`: Daftarkan `/certificates` route baru.
+
+   F. ENVIRONMENT:
+      - `.env.template`: Tambah `NEXAPLOT_LICENSE_KEY` dan `APP_URL`.
+
+   G. UNIT TEST — `tests/certificateService.test.js`:
+      - 19 test case, SEMUA LULUS ✅ dalam 9.5 detik.
+      - Mencakup: resolveValue (6 test), buildUserData (5 test),
+        generateCertificate (7 test), generateBatchCertificates (2 test - incl. partial fail scenario).
+
+   H. mapping_data FORMAT BARU (digunakan di NexaplotEditor frontend):
+      [
+        { "variable": "namaPeserta",  "source": "detailuser.namaLengkap", "type": "text" },
+        { "variable": "nilaiTotal",   "source": "userresult.score",       "type": "text" },
+        { "variable": "nilaiSection", "source": "section_scores_table",   "type": "table" },
+        { "variable": "qrVerifikasi", "source": "certificate.verifyUrl",  "type": "qr" },
+        { "variable": "nim",          "source": "detailuser.nim",         "type": "text" }
+      ]
+
+    I. BUGFIX/CLEANUP:
+       - Memperbaiki crash backend: Menghapus route legacy `/callback`, `/test-generate`, dan `/certificates` di `routes/index.js` yang merujuk ke fungsi controller yang sudah dihapus.
+       - Konsolidasi semua route sertifikat ke `routes/certificateRoutes.js`.
+
+Timestamp: 2026-04-05 16:05:00
+
 LATEST UPDATES - 09 Maret 2026
 ==============================
 

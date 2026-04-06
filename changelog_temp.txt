@@ -1,4 +1,4 @@
-LATEST UPDATES - 05 April 2026 (Part 2)
+﻿LATEST UPDATES - 05 April 2026 (Part 2)
 ==============================
 
 2. FIX API 500 & 400 (CANDIDATE RESULTS & CERTIFICATE GENERATION)
@@ -26,7 +26,7 @@ LATEST UPDATES - 05 April 2026
      Alur 3: View & Verifikasi Hasil Sertifikat (download, verifikasi QR publik)
 
    A. DATABASE (2 MIGRASI BARU):
-      - `20260405000001-update-template-format-to-pdf.js`: Rename kolom `file_docx` → `file_pdf`,
+      - `20260405000001-update-template-format-to-pdf.js`: Rename kolom `file_docx` â†’ `file_pdf`,
         tambah kolom `nexaplot_config (TEXT LONG)` untuk menyimpan NXCFG-... string dari NexaplotEditor.
       - `20260405000002-add-relations-to-certificates.js`: Tambah kolom `batchId`, `userResultId`,
         `templateFormatId`, `generated_data (JSON)` ke tabel `certificates`.
@@ -36,14 +36,14 @@ LATEST UPDATES - 05 April 2026
         update komentar `mapping_data` format baru (array {variable, source, type, label}).
       - `models/certificate.js`: Tambah kolom baru + asosiasi `belongsTo userresult`.
 
-   C. SERVICE BARU — `services/certificateService.js`:
+   C. SERVICE BARU â€” `services/certificateService.js`:
       - Core engine generate PDF menggunakan `NexaplotEngine` dari package `nexaplot`.
       - `resolveValue(source, ctx)`: Resolve nilai nested dari data context berdasarkan dotted path.
       - `buildUserData(mappingData, ctx)`: Build object data untuk dikirim ke nexaplot.generate().
-        Support special source `section_scores_table` (type table → Array of Objects).
+        Support special source `section_scores_table` (type table â†’ Array of Objects).
       - `generateCertificate({ userResultId, templateFormatId? })`: Generate sertifikat 1 peserta.
-        Flow: ambil userresult → cari template aktif → build userData → nexaplot.generate() →
-        simpan PDF ke storage/certificates/ → upsert record ke DB certificates.
+        Flow: ambil userresult â†’ cari template aktif â†’ build userData â†’ nexaplot.generate() â†’
+        simpan PDF ke storage/certificates/ â†’ upsert record ke DB certificates.
       - `generateBatchCertificates({ batchId, templateFormatId? })`: Generate semua peserta COMPLETED
         dalam satu batch, mengembalikan summary { success/fail per peserta }.
       - QR token di-generate otomatis (uuid v4), verifyUrl = APP_URL/verify/:token.
@@ -60,15 +60,15 @@ LATEST UPDATES - 05 April 2026
    E. ROUTES:
       - `routes/certificateRoutes.js` (BARU): Public /verify/:qrToken, Auth user /my/,
         Admin generate, list, delete.
-      - `routes/certificateTemplateRoutes.js` (UPDATE): Multer filter ganti .docx → .pdf,
+      - `routes/certificateTemplateRoutes.js` (UPDATE): Multer filter ganti .docx â†’ .pdf,
         tambah route GET /active dan POST /:id/config (simpan nexaplot_config dari designer).
       - `app.js`: Daftarkan `/certificates` route baru.
 
    F. ENVIRONMENT:
       - `.env.template`: Tambah `NEXAPLOT_LICENSE_KEY` dan `APP_URL`.
 
-   G. UNIT TEST — `tests/certificateService.test.js`:
-      - 19 test case, SEMUA LULUS ✅ dalam 9.5 detik.
+   G. UNIT TEST â€” `tests/certificateService.test.js`:
+      - 19 test case, SEMUA LULUS âœ… dalam 9.5 detik.
       - Mencakup: resolveValue (6 test), buildUserData (5 test),
         generateCertificate (7 test), generateBatchCertificates (2 test - incl. partial fail scenario).
 
@@ -154,20 +154,20 @@ Timestamp: 2026-03-09 10:40:00
 4. OVERHAUL SISTEM PENILAIAN PROFESIONAL (STANDAR TOEFL PBT/ITP)
    - Analisis mendalam menemukan 5 bug kritis pada engine scoring lama.
    - Menulis ulang `services/resultService.js` dengan Scoring Engine baru (standar ETS):
-     - Formula SCALE Standar untuk 3 section: `FinalScore = round((L + S + R) × 10 / 3)`.
+     - Formula SCALE Standar untuk 3 section: `FinalScore = round((L + S + R) Ã— 10 / 3)`.
      - Untuk N section: normalisasi proporsional otomatis.
-     - Skor final di-clamp ke range 310–677 (range valid TOEFL PBT resmi).
-     - Hapus fallback hardcoded 20 → ganti estimasi proporsional + warning log.
+     - Skor final di-clamp ke range 310â€“677 (range valid TOEFL PBT resmi).
+     - Hapus fallback hardcoded 20 â†’ ganti estimasi proporsional + warning log.
      - FIX MULTI-ATTEMPT: `getSectionScores` sekarang ketat menggunakan `resultId`.
    - Penambahan 3 kolom baru pada `userresults` (via migrasi DB):
      - `section_scores (JSON)`: snapshot skor per-section saat kalkulasi.
-     - `cefr_level (ENUM)`: level CEFR tersimpan otomatis (A1–C1).
+     - `cefr_level (ENUM)`: level CEFR tersimpan otomatis (A1â€“C1).
      - `passed (BOOLEAN)`: status kelulusan berdasarkan `passing_score` per batch.
    - Penambahan `passing_score (INTEGER)` pada tabel `batches`.
    - Fungsi baru `getCertificateData()` untuk data siap cetak sertifikat.
    - Endpoint baru: `GET /api/analytics/certificate-data`.
    - Migrasi database berjalan sukses (`npx sequelize-cli db:migrate`).
-   - Unit Test baru: `tests/professional_scoring.test.js` (15 uji, semua LULUS ✅).
+   - Unit Test baru: `tests/professional_scoring.test.js` (15 uji, semua LULUS âœ…).
    - File yang disentuh:
      - node-be/services/resultService.js (OVERHAUL TOTAL)
      - node-be/models/userresult.js, batch.js
@@ -181,7 +181,7 @@ Timestamp: 2026-03-09 11:10:00
 
 5. BUGFIX: KOMPATIBILITAS FORMAT `section_scores` DI SEMUA HALAMAN
    - Penyebab: `getSectionScores()` versi baru mengembalikan objek kaya `{correct, total, convertedScore}` bukan angka.
-   - Dampak: 3 halaman rusak — analytics (karakter JSON), batch results (kolom 0-9), detail results (teks JSON mentah).
+   - Dampak: 3 halaman rusak â€” analytics (karakter JSON), batch results (kolom 0-9), detail results (teks JSON mentah).
    - Fix Root Cause: `getSectionScores` di `resultService.js` sekarang **selalu** mengembalikan format flat `{ namaSection: convertedScore (number) }` baik dari fast-path (DB) maupun slow-path (recalculate).
    - Fix FE Defensive: `ParticipantResults.vue`, `[batchId].vue`, dan `getSectionIcon` diperbarui dengan guard `typeof val === 'object'` untuk aman dari format apapun.
    - File yang disentuh:
@@ -202,10 +202,10 @@ Timestamp: 2026-03-09 11:20:00
       - Sebelumnya: Halaman analytics masih menampilkan rata-rata lama meski scoring sudah dihitung ulang.
       - Ditambahkan log info setelah proses recalculate selesai.
    
-   C. FIX CSV EXPORT — SANITIZE NAMA SECTION ARAB (`analyticsController.js`)
+   C. FIX CSV EXPORT â€” SANITIZE NAMA SECTION ARAB (`analyticsController.js`)
       - Nama section berbahasa Arab (Istima', Qira'ah, Tarakib) kini di-strip karakter non-ASCII.
       - Fallback otomatis ke `section_1`, `section_2` dst. jika nama section kosong setelah sanitasi.
-      - Kolom baru di CSV: `cefr_level` dan `passed` (Lulus/Tidak Lulus) — siap untuk laporan institusi.
+      - Kolom baru di CSV: `cefr_level` dan `passed` (Lulus/Tidak Lulus) â€” siap untuk laporan institusi.
 
    D. DUKUNGAN UNTUK STANDAR PENILAIAN TOAFL (`resultService.js` & Frontend)
       - Ditambahkan dukungan parameter `exam_standard` di konfigurasi batch (`scoring_config.exam_standard = 'TOAFL'`).
@@ -222,7 +222,7 @@ Timestamp: 2026-03-09 11:20:00
      - node-be/tests/professional_scoring.test.js
      - nuxt-fe/pages/admin/batch/add.vue
      - nuxt-fe/pages/admin/batch/edit/[id].vue
-   - Unit Test: 23/23 LULUS ✅ (Termasuk 8 test baru khusus TOAFL)
+   - Unit Test: 23/23 LULUS âœ… (Termasuk 8 test baru khusus TOAFL)
 
    E. FITUR GENERASI SKALA KONVERSI OTOMATIS (Frontend `TableForm.vue`)
       - Ditambahkan tombol **Generate Otomatis** di halaman pembuatan/edit Tabel Penilaian (Skoring).
@@ -322,8 +322,8 @@ LATEST UPDATES - 05 Maret 2026
 
    a) INFRASTRUKTUR BARU:
       - `config/redis.js`: Singleton ioredis client dengan lazyConnect, enableOfflineQueue: false, exponential backoff retry.
-      - `services/cache.service.js`: Abstraksi layer lengkap — getCache, setCache (dengan size guard 512KB), deleteCache, clearByPattern (SCAN non-blocking), getCacheTTL, clearAll.
-      - `middlewares/cache.middleware.js`: Reusable Express middleware — cacheMiddleware (static key) dan cacheMiddlewareDynamic (key dari req). Menambahkan header X-Cache: HIT/MISS.
+      - `services/cache.service.js`: Abstraksi layer lengkap â€” getCache, setCache (dengan size guard 512KB), deleteCache, clearByPattern (SCAN non-blocking), getCacheTTL, clearAll.
+      - `middlewares/cache.middleware.js`: Reusable Express middleware â€” cacheMiddleware (static key) dan cacheMiddlewareDynamic (key dari req). Menambahkan header X-Cache: HIT/MISS.
       - Graceful fallback di semua operasi cache: jika Redis down, sistem tetap mengambil data dari database tanpa crash.
 
    b) ADMIN CACHE MANAGEMENT API (dilindungi permission 'system.app'):
@@ -332,10 +332,10 @@ LATEST UPDATES - 05 Maret 2026
       - Didaftarkan di `app.js` sebagai `app.use('/admin', cacheRoutes)`.
 
    c) INTEGRASI CACHE DI 4 CONTROLLER:
-      - `settingController.js`: Cache GET /settings → key `settings:global` TTL 300s; invalidasi saat updateSettings.
-      - `scoringController.js`: Cache GET /scoring → key `scoring:all` TTL 300s; Cache GET /scoring/:id → key `scoring:detail:{id}` TTL 300s; invalidasi paralel (Promise.all) saat store/update/destroy.
-      - `batchController.js`: Cache GET /batch → key `batch:all:{status}:{type}` TTL 30s (query-aware); invalidasi clearByPattern('batch:all:*') saat updateBatch & deleteBatch.
-      - `examController.js`: Cache getExamData → `exam:data:{batchId}` TTL 60s (hanya jika exam belum terkunci); Cache getTestMetadata → `exam:metadata:{batchId}` TTL 60s; Cache getSectionData → `exam:section:{batchId}:{sectionId}` TTL 60s. updateExamData menginvalidasi semua key terkait. Backward-compatible dengan node-cache lama.
+      - `settingController.js`: Cache GET /settings â†’ key `settings:global` TTL 300s; invalidasi saat updateSettings.
+      - `scoringController.js`: Cache GET /scoring â†’ key `scoring:all` TTL 300s; Cache GET /scoring/:id â†’ key `scoring:detail:{id}` TTL 300s; invalidasi paralel (Promise.all) saat store/update/destroy.
+      - `batchController.js`: Cache GET /batch â†’ key `batch:all:{status}:{type}` TTL 30s (query-aware); invalidasi clearByPattern('batch:all:*') saat updateBatch & deleteBatch.
+      - `examController.js`: Cache getExamData â†’ `exam:data:{batchId}` TTL 60s (hanya jika exam belum terkunci); Cache getTestMetadata â†’ `exam:metadata:{batchId}` TTL 60s; Cache getSectionData â†’ `exam:section:{batchId}:{sectionId}` TTL 60s. updateExamData menginvalidasi semua key terkait. Backward-compatible dengan node-cache lama.
 
    d) KONFIGURASI & ENV:
       - Ditambahkan ke `.env.template`: REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_DB.
@@ -495,7 +495,7 @@ LATEST UPDATES - 01 Maret 2026
      - node-be/migrations/20260227110000-create-audit-log.js
      - node-be/tests/migrationSync.test.js (update assertion)
 
-2. PENINGKATAN AUDIT LOG — SEMUA STATUS CODE TERCATAT
+2. PENINGKATAN AUDIT LOG â€” SEMUA STATUS CODE TERCATAT
    - Audit middleware sebelumnya hanya mencatat aksi yang berhasil (status 2xx).
    - Diperbarui agar mencatat SEMUA operasi mutasi (POST/PUT/PATCH/DELETE) termasuk yang gagal (4xx, 5xx).
    - Perbaikan konsistensi `userId`: kini menggunakan `req.user.uid` (Firebase UID) yang konsisten dengan kolom `uid` di tabel `users`.
@@ -506,8 +506,8 @@ LATEST UPDATES - 01 Maret 2026
 
 3. SISTEM LOG FILE VIEWER (API BARU)
    - Menambahkan dua endpoint baru untuk membaca log berbasis file (Winston) dari Frontend Admin:
-     - `GET /logs/system` — Menampilkan daftar file log beserta ukuran dan tipe (HTTP/Application).
-     - `GET /logs/system/:filename?lines=100` — Membaca N baris terakhir dari file log tertentu.
+     - `GET /logs/system` â€” Menampilkan daftar file log beserta ukuran dan tipe (HTTP/Application).
+     - `GET /logs/system/:filename?lines=100` â€” Membaca N baris terakhir dari file log tertentu.
    - Security: validasi nama file agar hanya file `.log` dalam folder `logs/` yang bisa diakses.
    - Kedua endpoint dilindungi dengan autentikasi dan permission `system.app`.
    - Penambahan unit test `tests/auditLogEnhancement.test.js` (5 test, semua lulus).

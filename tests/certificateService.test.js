@@ -60,7 +60,7 @@ jest.mock('../models', () => ({
 }));
 
 const db             = require('../models');
-const { resolveValue, buildUserData, generateCertificate, generateBatchCertificates }
+const { resolveValue, buildUserData, normalizeSectionScores, generateCertificate, generateBatchCertificates }
   = require('../services/certificateService');
 
 // =============================================================================
@@ -77,7 +77,12 @@ const mockUserResult = {
   status      : 'COMPLETED',
   totalQuestions: 100,
   correctCount  : 82,
-  section_scores: { listening: 523, structure: 480, reading: 510 },
+  // Format nested sebagaimana disimpan oleh resultService.calculateUserResult()
+  section_scores: {
+    listening : { correct: 35, total: 50, convertedScore: 523, percentage: 70 },
+    structure : { correct: 28, total: 40, convertedScore: 480, percentage: 70 },
+    reading   : { correct: 19, total: 30, convertedScore: 510, percentage: 63 }
+  },
   submittedAt   : new Date('2026-04-05'),
   user: {
     name     : 'Budi Santoso',
@@ -114,6 +119,57 @@ const mockTemplateFormat = {
   ],
   template: { name: 'Template Utama', status: true }
 };
+
+// =============================================================================
+// TEST SUITE 0: normalizeSectionScores
+// =============================================================================
+
+describe('normalizeSectionScores()', () => {
+  test('✅ Normalize format nested DB (dengan convertedScore)', () => {
+    const nested = {
+      listening : { correct: 35, total: 50, convertedScore: 523, percentage: 70 },
+      structure : { correct: 28, total: 40, convertedScore: 480, percentage: 70 },
+      reading   : { correct: 19, total: 30, convertedScore: 510, percentage: 63 }
+    };
+    const result = normalizeSectionScores(nested);
+    expect(result).toEqual({ listening: 523, structure: 480, reading: 510 });
+  });
+
+  test('✅ Normalize format flat (number langsung)', () => {
+    const flat = { listening: 523, structure: 480, reading: 510 };
+    const result = normalizeSectionScores(flat);
+    expect(result).toEqual({ listening: 523, structure: 480, reading: 510 });
+  });
+
+  test('✅ Normalize format JSON string (nested)', () => {
+    const jsonString = JSON.stringify({
+      listening : { correct: 35, total: 50, convertedScore: 523, percentage: 70 }
+    });
+    const result = normalizeSectionScores(jsonString);
+    expect(result).toEqual({ listening: 523 });
+  });
+
+  test('✅ Normalize format JSON string (flat)', () => {
+    const jsonString = JSON.stringify({ listening: 523, structure: 480 });
+    const result = normalizeSectionScores(jsonString);
+    expect(result).toEqual({ listening: 523, structure: 480 });
+  });
+
+  test('❌ Return {} jika input null/undefined', () => {
+    expect(normalizeSectionScores(null)).toEqual({});
+    expect(normalizeSectionScores(undefined)).toEqual({});
+  });
+
+  test('❌ Return {} jika JSON string tidak valid', () => {
+    expect(normalizeSectionScores('invalid-json')).toEqual({});
+  });
+
+  test('✅ Handle nested object dengan convertedScore = 0', () => {
+    const nested = { listening: { correct: 0, total: 50, convertedScore: 0, percentage: 0 } };
+    const result = normalizeSectionScores(nested);
+    expect(result).toEqual({ listening: 0 });
+  });
+});
 
 // =============================================================================
 // TEST SUITE 1: resolveValue
@@ -156,6 +212,7 @@ describe('resolveValue()', () => {
 // =============================================================================
 
 describe('buildUserData()', () => {
+  // ctx dengan section_scores FLAT (sudah di-normalize oleh normalizeSectionScores)
   const ctx = {
     detailuser    : { namaLengkap: 'Budi Santoso', nim: '12345678' },
     userresult    : { score: 550 },
@@ -181,14 +238,46 @@ describe('buildUserData()', () => {
     expect(result.namaBatch).toBe('Batch April 2026');
   });
 
-  test('✅ Build userData dengan source section_scores_table (type table)', () => {
+  test('✅ Build userData dengan source section_scores_table: score harus NUMBER', () => {
     const mappingData = [
       { variable: 'nilaiSection', source: 'section_scores_table', type: 'table' }
     ];
     const result = buildUserData(mappingData, ctx);
     expect(Array.isArray(result.nilaiSection)).toBe(true);
     expect(result.nilaiSection).toHaveLength(3);
+    // Score harus number, bukan object!
     expect(result.nilaiSection[0]).toEqual({ section: 'listening', score: 523 });
+    expect(typeof result.nilaiSection[0].score).toBe('number');
+    expect(result.nilaiSection[1]).toEqual({ section: 'structure', score: 480 });
+    expect(result.nilaiSection[2]).toEqual({ section: 'reading',   score: 510 });
+  });
+
+  test('✅ Build userData dengan source section_score.<NamaSection> (individual)', () => {
+    const mappingData = [
+      { variable: 'nilaiListening',  source: 'section_score.listening',  type: 'text' },
+      { variable: 'nilaiStructure',  source: 'section_score.structure',  type: 'text' },
+      { variable: 'nilaiReading',    source: 'section_score.reading',    type: 'text' }
+    ];
+    const result = buildUserData(mappingData, ctx);
+    expect(result.nilaiListening).toBe(523);
+    expect(result.nilaiStructure).toBe(480);
+    expect(result.nilaiReading).toBe(510);
+  });
+
+  test('✅ section_score lookup case-insensitive', () => {
+    const mappingData = [
+      { variable: 'nilaiListening', source: 'section_score.LISTENING', type: 'text' }
+    ];
+    const result = buildUserData(mappingData, ctx);
+    expect(result.nilaiListening).toBe(523);
+  });
+
+  test('✅ section_score returns 0 jika section tidak ditemukan', () => {
+    const mappingData = [
+      { variable: 'nilaiX', source: 'section_score.tidakAda', type: 'text' }
+    ];
+    const result = buildUserData(mappingData, ctx);
+    expect(result.nilaiX).toBe(0);
   });
 
   test('✅ Build userData dengan type qr', () => {

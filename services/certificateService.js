@@ -11,13 +11,53 @@ const { logger }   = require('../utils/logger');
 let NexaplotEngine = null;
 let pdfLib         = null;
 
-function getEngine() {
-  if (!NexaplotEngine) NexaplotEngine = require('nexaplot');
-  if (!pdfLib)         pdfLib         = require('pdf-lib');
+async function getEngine() {
+  if (!NexaplotEngine) {
+    const nexa = await import('nexaplot');
+    NexaplotEngine = nexa.NexaplotEngine || nexa.default;
+  }
+  if (!pdfLib) {
+    // pdf-lib bisa di-require tapi untuk konsistensi di async context gunakan import
+    const plib = await import('pdf-lib');
+    pdfLib = plib.PDFDocument ? plib : plib.default;
+  }
   return { NexaplotEngine, pdfLib };
 }
 
 const LICENSE_KEY = process.env.NEXAPLOT_LICENSE_KEY || '';
+
+// =============================================================================
+// HELPER: Normalize section_scores dari format DB (nested/flat) → flat number
+// =============================================================================
+
+/**
+ * Normalize section_scores dari berbagai format ke flat { namaSection: convertedScore }.
+ * Format DB (nested): { Listening: { correct: 30, total: 50, convertedScore: 523, percentage: 60 } }
+ * Format flat (lama): { Listening: 523 }
+ * @param {object|string} raw  - raw section_scores dari DB
+ * @returns {object} flat map: { namaSection: number }
+ */
+function normalizeSectionScores(raw) {
+  if (!raw) return {};
+  let parsed = raw;
+  if (typeof raw === 'string') {
+    try { parsed = JSON.parse(raw); } catch (_) { return {}; }
+  }
+  if (typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+  const flat = {};
+  for (const [name, val] of Object.entries(parsed)) {
+    if (val === null || val === undefined) {
+      flat[name] = 0;
+    } else if (typeof val === 'object' && !Array.isArray(val)) {
+      // Format nested: { correct, total, convertedScore, percentage }
+      flat[name] = typeof val.convertedScore === 'number' ? val.convertedScore : 0;
+    } else {
+      flat[name] = typeof val === 'number' ? val : Number(val) || 0;
+    }
+  }
+  return flat;
+}
 
 // =============================================================================
 // HELPER: Resolve nilai dari data context berdasarkan dotted source path
@@ -62,13 +102,25 @@ function buildUserData(mappingData, ctx) {
     const { variable, source, type } = mapping;
     if (!variable || !source) continue;
 
-    // Special case: "section_scores_table" → array for tipe table
+    // Special case 1: "section_scores_table" → array of { section, score } untuk tipe table
     if (source === 'section_scores_table') {
+      // ctx.section_scores sudah di-normalize menjadi flat { namaSection: number }
       const sectionScores = ctx.section_scores || {};
       userData[variable] = Object.entries(sectionScores).map(([section, score]) => ({
         section,
-        score: typeof score === 'number' ? score : String(score)
+        score: typeof score === 'number' ? score : Number(score) || 0
       }));
+    }
+    // Special case 2: "section_score.<NamaSection>" → nilai konversi section tertentu
+    // Contoh source: "section_score.Listening" → nilai converted Listening
+    else if (source.startsWith('section_score.')) {
+      const sectionName = source.slice('section_score.'.length);
+      const sectionScores = ctx.section_scores || {};
+      // Case-insensitive lookup
+      const found = Object.entries(sectionScores).find(
+        ([k]) => k.toLowerCase() === sectionName.toLowerCase()
+      );
+      userData[variable] = found ? found[1] : 0;
     } else {
       userData[variable] = resolveValue(source, ctx);
     }
@@ -141,15 +193,13 @@ async function generateCertificate({ userResultId, templateFormatId = null }) {
   }
 
   // ── 3. Siapkan data context peserta ──────────────────────────────────────
-  const detailUser    = userResult.user?.detailuser || {};
-  const sectionScores = (() => {
-    try {
-      const raw = userResult.section_scores;
-      return typeof raw === 'string' ? JSON.parse(raw) : (raw || {});
-    } catch (_) {
-      return {};
-    }
-  })();
+  const detailUser = userResult.user?.detailuser || {};
+
+  // NORMALIZE section_scores: DB menyimpan format nested {correct, total, convertedScore, percentage}
+  // atau format flat {namaSection: number}. Fungsi normalizeSectionScores() mengkonversi ke flat.
+  const sectionScores = normalizeSectionScores(userResult.section_scores);
+
+  logger.info(`[CertService] section_scores raw type: ${typeof userResult.section_scores}, normalized keys: ${Object.keys(sectionScores).join(', ')}`);
 
   // Generate token unik dan nomor sertifikat
   const qrToken    = uuidv4();
@@ -190,10 +240,15 @@ async function generateCertificate({ userResultId, templateFormatId = null }) {
           })
         : ''
     },
+    // section_scores: flat { namaSection: convertedScore (number) }
+    // Digunakan oleh buildUserData() untuk:
+    //   - source: 'section_scores_table'          → Array tabel semua section
+    //   - source: 'section_score.Listening'        → Nilai section Listening saja
     section_scores       : sectionScores,
+    // section_scores_table: pre-computed array untuk kemudahan
     section_scores_table : Object.entries(sectionScores).map(([section, score]) => ({
       section,
-      score: typeof score === 'number' ? score : String(score)
+      score: typeof score === 'number' ? score : Number(score) || 0
     })),
     certificate: {
       number    : certNumber,
@@ -237,7 +292,7 @@ async function generateCertificate({ userResultId, templateFormatId = null }) {
   const templateBuffer = fs.readFileSync(templatePath);
 
   // ── 6. Generate PDF via nexaplot engine ──────────────────────────────────
-  const { NexaplotEngine: Engine, pdfLib: pLib } = getEngine();
+  const { NexaplotEngine: Engine, pdfLib: pLib } = await getEngine();
   const engine   = new Engine(pLib, LICENSE_KEY);
   const pdfBytes = await engine.generate(templateBuffer, format.nexaplot_config, userData);
 
@@ -336,5 +391,6 @@ module.exports = {
   generateBatchCertificates,
   // Export helpers untuk unit testing
   resolveValue,
-  buildUserData
+  buildUserData,
+  normalizeSectionScores
 };

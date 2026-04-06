@@ -423,7 +423,13 @@ exports.getCandidates = async (req, res, next) => {
     });
     
     // Formatter
-    const data = await Promise.all(rows.map(async (row) => {
+    const data = (await Promise.all(rows.map(async (row) => {
+      // DEFENSIVE: Skip if user is missing (orphaned record)
+      if (!row.user) {
+        logger.warn(`[getCandidates] Found orphaned userresult ID ${row.id} - skipping.`);
+        return null;
+      }
+
       // Cek certificate status
       // Manual query ke certificate table kalau belum ada relasi
       // const cert = await db.certificate.findOne({ where: { userResultId: row.id } });
@@ -431,7 +437,6 @@ exports.getCandidates = async (req, res, next) => {
       // const certId = cert ? cert.id : null;
       
       // MOCK SEMENTARA KARENA MODEL CERTIFICATE BELUM DILIHAT/DIKETAHUI RELASINYA
-      // Kita anggap pending default, atau simple check
       const status = 'pending'; 
       const certId = null;
 
@@ -440,15 +445,15 @@ exports.getCandidates = async (req, res, next) => {
         userId: row.user.uid,
         name: row.user.detailuser?.namaLengkap || row.user.name,
         nim: row.user.detailuser?.nim || '-',
-        prodi: row.user.detailuser?.prodi || '-', // Pastikan field prodi ada di detailuser
+        prodi: row.user.detailuser?.prodi || '-', 
         score: row.score,
-        date: row.submittedAt, // Date object, frontend bisa format
+        date: row.submittedAt, 
         batch: row.batch?.name || '-',
-        batchId: row.batch?.idBatch || '-', // ID batch
+        batchId: row.batch?.idBatch || '-', 
         certificateStatus: status,
         certificateId: certId
       };
-    }));
+    }))).filter(item => item !== null);
     
     // Apply Status Filter in Memory (fallback if SQL too complex without known schema)
     // Jika status request 'generated', filter `data` array? NO, pagination akan rusak.
@@ -463,9 +468,11 @@ exports.getCandidates = async (req, res, next) => {
         page: pageNum,
         last_page: Math.ceil(count / limitNum),
         summary: {
-            total_pending: 0, // Placeholder
-            total_generated: 0, // Placeholder
-            average_score: avgScoreResult ? parseFloat(avgScoreResult.get('avgScore')).toFixed(2) : 0
+            total_pending: 0, 
+            total_generated: 0, 
+            average_score: (avgScoreResult && avgScoreResult.get('avgScore')) 
+                ? parseFloat(avgScoreResult.get('avgScore')).toFixed(2) 
+                : 0
         }
       }
     };

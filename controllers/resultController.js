@@ -317,6 +317,20 @@ exports.getCandidates = async (req, res, next) => {
       whereClause.batchId = batch_id;
     }
 
+    // 2. HIGHEST SCORE ONLY PER USER (Requirement: Ambil nilai tertinggi saja)
+    // Filter results to only show the one with the highest score for each unique user
+    whereClause.id = {
+      [Op.in]: db.sequelize.literal(`(
+        SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER (
+            PARTITION BY userId 
+            ORDER BY score DESC, submittedAt DESC, id DESC
+          ) as rn
+          FROM userresults
+        ) as ranked_results WHERE rn = 1
+      )`)
+    };
+
     // 2. Filter by Certificate/Result Status (pending vs generated)
     // Asumsi: 'generated' jika sudah ada certificateId atau logic lain?
     // User request: certificate status: pending, generated.

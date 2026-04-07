@@ -276,53 +276,79 @@ exports.verifyCertificate = async (req, res, next) => {
  */
 exports.downloadCertificate = async (req, res, next) => {
   try {
-    const { id }    = req.params;
-    const userId    = req.user?.uid;
+    const { id } = req.params;
+    const userId = req.user?.uid;
+    const userRole = req.user?.role;
 
-    const certificate = await db.certificate.findByPk(id);
+    logger.info(`[CertController] Download requested for ID: ${id} by User: ${userId} (${userRole})`);
+
+    // 1. Cari record sertifikat
+    let certificate = await db.certificate.findByPk(id);
+    
+    // Fallback: Jika tidak ditemukan sebagai PK (mungkin integer?), coba cari di kolom lain atau casting?
+    // Namun ID di model adalah UUID. Jika frontend kirim integer ID dari userresult?
+    if (!certificate) {
+      certificate = await db.certificate.findOne({ where: { userResultId: id } });
+    }
 
     if (!certificate) {
+      logger.warn(`[CertController] Certificate record not found for ID: ${id}`);
       return res.status(404).json({
-        status  : false,
-        message : 'Sertifikat tidak ditemukan.'
+        status: false,
+        message: `Sertifikat dengan ID ${id} tidak ditemukan di database.`
       });
     }
 
-    // Pastikan hanya pemilik atau admin yang bisa download
-    if (certificate.userId !== userId && req.user?.role !== 'admin') {
+    // 2. Otorisasi
+    if (certificate.userId !== userId && userRole !== 'admin') {
+      logger.warn(`[CertController] Unauthorized download attempt: User ${userId} tried to download Cert of User ${certificate.userId}`);
       return res.status(403).json({
-        status  : false,
-        message : 'Akses ditolak.'
+        status: false,
+        message: 'Akses ditolak. Anda hanya dapat mengunduh sertifikat milik sendiri.'
       });
     }
 
+    // 3. Cek ketersediaan URL PDF di database
     if (!certificate.pdfUrl) {
+      logger.warn(`[CertController] PDF URL is empty in database for Cert ID: ${id}`);
       return res.status(404).json({
-        status  : false,
-        message : 'File PDF belum tersedia.'
+        status: false,
+        message: 'Data file PDF belum tersedia di database untuk sertifikat ini.'
       });
     }
 
-    // Resolve absolute path dari pdfUrl (relative path dari storage)
+    // 4. Resolve absolute path
     const relativePath = certificate.pdfUrl.startsWith('/')
       ? certificate.pdfUrl.slice(1)
       : certificate.pdfUrl;
 
     const absolutePath = storageUtil.resolvePath(relativePath);
+    logger.info(`[CertController] Attempting to stream file: ${absolutePath}`);
 
+    // 5. Cek fisik file di filesystem
     if (!fs.existsSync(absolutePath)) {
+      logger.error(`[CertController] Physical PDF file not found at: ${absolutePath}`);
       return res.status(404).json({
-        status  : false,
-        message : 'File PDF tidak ditemukan di server.'
+        status: false,
+        message: 'File PDF tidak ditemukan di server. Silakan hubungi admin untuk generate ulang.'
       });
     }
 
-    const fileName = `sertifikat-${certificate.certificateNumber}.pdf`;
+    const fileName = `sertifikat-${certificate.certificateNumber || 'download'}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    fs.createReadStream(absolutePath).pipe(res);
+    
+    const fileStream = fs.createReadStream(absolutePath);
+    fileStream.on('error', (err) => {
+      logger.error(`[CertController] Stream error: ${err.message}`);
+      if (!res.headersSent) {
+        res.status(500).json({ status: false, message: 'Gagal membaca file sertifikat.' });
+      }
+    });
+
+    fileStream.pipe(res);
   } catch (error) {
-    logger.error('[CertController] downloadCertificate error:', error);
+    logger.error('[CertController] downloadCertificate exception:', error.message);
     next(error);
   }
 };

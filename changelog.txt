@@ -32,6 +32,14 @@ Timestamp: 2026-04-07 15:45:00
 
 Timestamp: 2026-04-07 16:25:00
 
+4. UNICODE NORMALIZATION UNTUK VARIABEL SERTIFIKAT
+   - BUGFIX: Memperbaiki masalah nilai section yang muncul 0 pada nama section dengan karakter khusus/Arab (ā, ū, ‘, ’).
+     Penyebab: Perbedaan representasi biner Unicode (NFC vs NFD) dan variasi tanda kutip (Smart Quotes) menyebabkan kegagalan pencocokan string `===`.
+     Solusi: Implementasi helper `normalizeKey` menggunakan `str.normalize('NFC')` dan standarisasi tanda kutip pada `certificateService.js`.
+   - OPTIMASI: Seluruh key dalam snapshot `section_scores` kini dinormalisasi sebelum lookup untuk memastikan kecocokan yang robust.
+
+Timestamp: 2026-04-07 16:50:00
+
 LATEST UPDATES - 05 April 2026 (Part 2)
 ==============================
 

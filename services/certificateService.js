@@ -47,24 +47,41 @@ function normalizeSectionScores(raw) {
 
   const flat = {};
   for (const [name, val] of Object.entries(parsed)) {
+    // Normalize key (section name) to NFC and standardize quotes for matching
+    const normName = normalizeKey(name);
+    
     if (val === null || val === undefined) {
-      flat[name] = 0;
+      flat[normName] = 0;
     } else if (typeof val === 'object' && !Array.isArray(val)) {
-      // Handle various nested formats: { convertedScore }, { score }, { value }
+      // Handle various nested formats
       if (typeof val.convertedScore === 'number') {
-        flat[name] = val.convertedScore;
+        flat[normName] = val.convertedScore;
       } else if (typeof val.score === 'number') {
-        flat[name] = val.score;
+        flat[normName] = val.score;
       } else if (typeof val.value === 'number') {
-        flat[name] = val.value;
+        flat[normName] = val.value;
       } else {
-        flat[name] = 0;
+        flat[normName] = 0;
       }
     } else {
-      flat[name] = typeof val === 'number' ? val : Number(val) || 0;
+      flat[normName] = typeof val === 'number' ? val : Number(val) || 0;
     }
   }
   return flat;
+}
+
+/**
+ * Normalisasi string kunci (nama section) agar tahan terhadap variasi biner Unicode (NFC/NFD)
+ * serta perbedaan jenis tanda kutip (Smart vs Straight quotes).
+ * @param {string} str 
+ * @returns {string} normalized string
+ */
+function normalizeKey(str) {
+  if (!str) return '';
+  return str.normalize('NFC')
+    .toLowerCase()
+    .replace(/[‘’“”]/g, "'") // Standarisasi tanda kutip
+    .trim();
 }
 
 // =============================================================================
@@ -120,15 +137,13 @@ function buildUserData(mappingData, ctx) {
       }));
     }
     // Special case 2: "section_score.<NamaSection>" → nilai konversi section tertentu
-    // Contoh source: "section_score.Listening" → nilai converted Listening
     else if (source.startsWith('section_score.')) {
-      const sectionName = source.slice('section_score.'.length);
-      const sectionScores = ctx.section_scores || {};
-      // Case-insensitive lookup
-      const found = Object.entries(sectionScores).find(
-        ([k]) => k.toLowerCase() === sectionName.toLowerCase()
-      );
-      userData[variable] = found ? found[1] : 0;
+      const targetSection = normalizeKey(source.slice('section_score.'.length));
+      const sectionScores = ctx.section_scores || {}; // Keys are already normalized by normalizeSectionScores
+      
+      // Lookup normalized key
+      const score = sectionScores[targetSection];
+      userData[variable] = score !== undefined ? score : 0;
     } else {
       userData[variable] = resolveValue(source, ctx);
     }

@@ -22,6 +22,16 @@ Timestamp: 2026-04-07 15:15:00
 
 Timestamp: 2026-04-07 15:45:00
 
+3. PERBAIKAN DATABASE CONSTRAINT (SCORING DETAILS)
+   - BUGFIX: Memperbaiki error `Cannot add or update a child row: a foreign key constraint fails` saat menyimpan tabel skoring.
+     Penyebab: Kolom `section_category` di tabel `scoring_details` terikat oleh constraint FK ke `sections.idSection`, sehingga menolak input kategori string ("listening", "reading", dll).
+     Solusi: Implementasi migrasi database untuk menghapus constraint `fk_scoring_details_section`.
+   - File yang disentuh:
+     - node-be/migrations/20260407161500-remove-scoring-details-fk-constraint.js
+   - VERIFIKASI: Migrasi berhasil dijalankan (UP) di lingkungan pengembangan.
+
+Timestamp: 2026-04-07 16:25:00
+
 LATEST UPDATES - 05 April 2026 (Part 2)
 ==============================
 

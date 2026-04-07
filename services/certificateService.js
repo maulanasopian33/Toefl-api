@@ -50,8 +50,16 @@ function normalizeSectionScores(raw) {
     if (val === null || val === undefined) {
       flat[name] = 0;
     } else if (typeof val === 'object' && !Array.isArray(val)) {
-      // Format nested: { correct, total, convertedScore, percentage }
-      flat[name] = typeof val.convertedScore === 'number' ? val.convertedScore : 0;
+      // Handle various nested formats: { convertedScore }, { score }, { value }
+      if (typeof val.convertedScore === 'number') {
+        flat[name] = val.convertedScore;
+      } else if (typeof val.score === 'number') {
+        flat[name] = val.score;
+      } else if (typeof val.value === 'number') {
+        flat[name] = val.value;
+      } else {
+        flat[name] = 0;
+      }
     } else {
       flat[name] = typeof val === 'number' ? val : Number(val) || 0;
     }
@@ -273,8 +281,9 @@ async function generateCertificate({ userResultId, templateFormatId = null }) {
 
   // Pastikan variabel QR selalu menggunakan verifyUrl yang baru di-generate
   for (const mapping of mappingData) {
-    if (mapping.type === 'qr') {
+    if (mapping.type === 'qr' || mapping.source === 'certificate.verifyUrl') {
       userData[mapping.variable] = verifyUrl;
+      logger.info(`[CertService] Variable "${mapping.variable}" set to verifyUrl: ${verifyUrl}`);
     }
   }
 

@@ -56,15 +56,15 @@ const mapCEFR = (score) => {
 const CATEGORY_MATCHERS = [
   {
     category: 'listening',
-    regex: /(listen|dengar|istima|audio|suara|percakapan)/i
+    regex: /(listen|dengar|istima|audio|suara|percakapan|fahmul\s?masmu|muhadatsah)/i
   },
   {
     category: 'reading',
-    regex: /(read|baca|qira|teks|wacana|pemahaman|comprehension)/i
+    regex: /(read|baca|qira|teks|wacana|pemahaman|comprehension|fahmul\s?maqru)/i
   },
   {
     category: 'structure',
-    regex: /(struct|grammar|tata|tarakib|tata\s?bahasa|tulis|write|expression)/i
+    regex: /(struct|grammar|tata|tarakib|tata\s?bahasa|tulis|write|expression|qawaid|nahwu|sharaf)/i
   }
 ];
 
@@ -354,7 +354,7 @@ async function calculateUserResult(userId, batchId, resultId = null) {
     const finalScore = _calculateFinalScore(sectionScores, scoringType, config);
 
     // Step 5: CEFR & Passing
-    const cefrLevel = mapCEFR(finalScore);
+    const cefrLevel = _calculateCEFRLevel(finalScore, config);
     const passed = passingScore !== null ? finalScore >= passingScore : null;
 
     // Step 6: Build section_scores snapshot (simplified, for DB storage)

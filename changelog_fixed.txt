@@ -1,0 +1,56 @@
+
+LATEST UPDATES - 07 April 2026
+==============================
+
+1. PERBAIKAN PATH RESOLUTION SERTIFIKAT PDF
+   - BUGFIX: Memperbaiki error "Physical PDF file not found" saat mengunduh atau menghapus sertifikat.
+     Penyebab: Sistem gagal menangani `pdfUrl` yang disimpan sebagai URL lengkap (dengan domain) di database, sehingga mencoba menggabungkannya dengan path lokal secara tidak valid.
+     Solusi: Menambahkan metode `getRelativePath` pada `storageUtil` untuk mengekstrak path relatif secara aman dari URL maupun path string, kemudian menggunakannya sebelum resolusi path fisik.
+   - File yang disentuh:
+     - node-be/utils/storage.js
+     - node-be/controllers/certificateController.js
+   - VERIFIKASI: Telah diuji dengan script integration `test_integration_path.js` mencakup berbagai format input (URL, absolute path, relative path).
+
+Timestamp: 2026-04-07 15:15:00
+
+2. IMPLEMENTASI SISTEM PENILAIAN SECTION DINAMIS (TOAFL & TOEFL)
+   - ANALISIS: Menyusun arsitektur penilaian per-section yang mampu menangani nama section dinamis dan perbedaan standar antara TOAFL dan TOEFL.
+   - OPTIMASI: Memperkuat `CATEGORY_MATCHERS` dengan variasi istilah Arab (Istima', Qawaid, Tarakib, dll) dan Inggris untuk deteksi kategori otomatis.
+   - BUGFIX: Memperbaiki kalkulasi `cefr_level` pada `calculateUserResult` agar menggunakan logika pemetaan yang sesuai dengan standar ujian (`_calculateCEFRLevel`) alih-alih hardcoded TOEFL.
+   - STANDARDIZASI: Memastikan data snapshot `section_scores` di database menyimpan informasi lengkap (correct, total, convertedScore) untuk fleksibilitas laporan.
+   - VERIFIKASI: Telah diuji dengan unit test baru `tests/dynamicScoring.test.js` mencakup pengujian regex kategori dan mapping CEFR lintas standar.
+
+Timestamp: 2026-04-07 15:45:00
+
+LATEST UPDATES - 05 April 2026 (Part 2)
+==============================
+
+2. FIX API 500 & 400 (CANDIDATE RESULTS & CERTIFICATE GENERATION)
+   - BUGFIX: Memperbaiki error 500 "Cannot read properties of null (reading 'uid')" di `getCandidates`.
+     Penyebab: Adanya data `userresults` yatim (orphaned) yang tidak memiliki user di tabel `users`.
+     Solusi: Menambahkan pemeriksaan null defensif pada `resultController.js` untuk melewati data yang tidak valid (skip orphans).
+   - BUGFIX: Memperbaiki error 400 "userResultId wajib diisi" saat generate sertifikat.
+     Penyebab: Frontend mengirimkan ID dengan prefix `res-` (contoh: "res-44") sehingga `parseInt` di backend menghasilkan `NaN`.
+     Solusi: Memperbarui `generate.vue` di frontend untuk membersihkan prefix `res-` sebelum mengirimkan ID ke API.
+   - OPTIMASI: Menangani nilai rata-rata (average score) yang bernilai `null` agar tidak menyebabkan crash `NaN.toFixed(2)`.
+   - BUGFIX: Memperbaiki error 500 "require is not defined" saat generate sertifikat.
+     Penyebab: Library `nexaplot` menggunakan format ES Module (ESM) yang menyebabkan konflik `require` di Node.js 22.
+     Solusi: Migrasi pemanggilan library di `certificateService.js` menggunakan dynamic `import()`.
+   - VERIFIKASI: Telah diuji dengan script diagnostik `test_fix_500.js` dan `test_cert_gen.js`.
+
+Timestamp: 2026-04-05 20:23:00
+
+LATEST UPDATES - 05 April 2026
+==============================
+
+1. IMPLEMENTASI SISTEM GENERATE SERTIFIKAT PDF (NEXAPLOT ENGINE)
+   - Merancang dan mengimplementasikan sistem generate sertifikat PDF 3-alur:
+     Alur 1: Save Template PDF (upload base PDF + konfigurasi desain nexaplot)
+     Alur 2: Generate Sertifikat (manual oleh admin, per peserta atau per batch)
+     Alur 3: View & Verifikasi Hasil Sertifikat (download, verifikasi QR publik)
+
+   A. DATABASE (2 MIGRASI BARU):
+      - `20260405000001-update-template-format-to-pdf.js`: Rename kolom `file_docx` → `file_pdf`,
+        tambah kolom `nexaplot_config (TEXT LONG)` untuk menyimpan NXCFG-... string dari NexaplotEditor.
+      - `20260405000002-add-relations-to-certificates.js`: Tambah kolom `batchId`, `userResultId`,
+        `templateFormatId`, `generated_data (JSON)` ke tabel `certificates`.

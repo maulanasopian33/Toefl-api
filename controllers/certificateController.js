@@ -318,10 +318,7 @@ exports.downloadCertificate = async (req, res, next) => {
     }
 
     // 4. Resolve absolute path
-    const relativePath = certificate.pdfUrl.startsWith('/')
-      ? certificate.pdfUrl.slice(1)
-      : certificate.pdfUrl;
-
+    const relativePath = storageUtil.getRelativePath(certificate.pdfUrl);
     const absolutePath = storageUtil.resolvePath(relativePath);
     logger.info(`[CertController] Attempting to stream file: ${absolutePath}`);
 
@@ -376,9 +373,7 @@ exports.deleteCertificate = async (req, res, next) => {
     // Hapus file PDF dari storage jika ada
     if (certificate.pdfUrl) {
       try {
-        const relativePath = certificate.pdfUrl.startsWith('/')
-          ? certificate.pdfUrl.slice(1)
-          : certificate.pdfUrl;
+        const relativePath = storageUtil.getRelativePath(certificate.pdfUrl);
         const absolutePath = storageUtil.resolvePath(relativePath);
         if (fs.existsSync(absolutePath)) {
           fs.unlinkSync(absolutePath);

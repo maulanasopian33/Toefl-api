@@ -1,3 +1,17 @@
+
+LATEST UPDATES - 07 April 2026
+==============================
+
+1. PERBAIKAN PATH RESOLUTION SERTIFIKAT PDF
+   - BUGFIX: Memperbaiki error "Physical PDF file not found" saat mengunduh atau menghapus sertifikat.
+     Penyebab: Sistem gagal menangani `pdfUrl` yang disimpan sebagai URL lengkap (dengan domain) di database, sehingga mencoba menggabungkannya dengan path lokal secara tidak valid.
+     Solusi: Menambahkan metode `getRelativePath` pada `storageUtil` untuk mengekstrak path relatif secara aman dari URL maupun path string, kemudian menggunakannya sebelum resolusi path fisik.
+   - File yang disentuh:
+     - node-be/utils/storage.js
+     - node-be/controllers/certificateController.js
+   - VERIFIKASI: Telah diuji dengan script integration `test_integration_path.js` mencakup berbagai format input (URL, absolute path, relative path).
+
+Timestamp: 2026-04-07 15:15:00
 LATEST UPDATES - 05 April 2026 (Part 2)
 ==============================
 
@@ -946,3 +960,4 @@ Timestamp: 2026-02-02 22:30:00.
  2 0 2 6 - 0 2 - 0 3 
  
  2 2 : 5 5 : 0 0 
+

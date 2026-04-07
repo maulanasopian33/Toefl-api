@@ -18,6 +18,28 @@ const storage = {
   },
 
   /**
+   * Extract relative path from a potentially full URL or already relative path
+   */
+  getRelativePath: (storedPath) => {
+    if (!storedPath) return '';
+    
+    // Check if it's a full URL
+    if (storedPath.startsWith('http://') || storedPath.startsWith('https://')) {
+      try {
+        const urlObj = new URL(storedPath);
+        // urlObj.pathname will be like "/storage/certificates/file.pdf"
+        return urlObj.pathname.startsWith('/') ? urlObj.pathname.slice(1) : urlObj.pathname;
+      } catch (e) {
+        // Fallback for malformed URLs
+        return storedPath;
+      }
+    }
+    
+    // Fallback if it's already a relative path starting with /
+    return storedPath.startsWith('/') ? storedPath.slice(1) : storedPath;
+  },
+
+  /**
    * Resolve an absolute path within the storage directory
    */
   resolvePath: (subPath = '') => {

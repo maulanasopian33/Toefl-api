@@ -315,6 +315,17 @@ async function generateCertificate({ userResultId, templateFormatId = null }) {
   }
   const templateBuffer = fs.readFileSync(templatePath);
 
+  const { debugLog } = useDebug();
+  await debugLog('User Data', { userData });
+  await debugLog('Template Config', { templateConfig: format.nexaplot_config });
+  await debugLog('Mapping Data', { mappingData });
+  await debugLog('Template Path', { templatePath });
+  await debugLog('Certificate Number', { certNumber });
+  await debugLog('Verify URL', { verifyUrl });
+  await debugLog('User Result', { userResult });
+  await debugLog('Section Scores', { sectionScores });
+
+
   // ── 6. Generate PDF via nexaplot engine ──────────────────────────────────
   const { NexaplotEngine: Engine, pdfLib: pLib } = await getEngine();
   const engine   = new Engine(pLib, LICENSE_KEY);

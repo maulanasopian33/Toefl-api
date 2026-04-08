@@ -1,4 +1,30 @@
 
+LATEST UPDATES - 08 April 2026
+==============================
+
+1. IMPLEMENTASI FITUR LOGIN AS USER & SWITCH BACK
+   - Menambahkan endpoint `POST /users/:uid/login-as` untuk memungkinkan admin masuk sebagai pengguna tertentu.
+   - Menggunakan Firebase Custom Token untuk otentikasi aman tanpa memerlukan password pengguna.
+   - Implementasi Fitur "Switch Back": Backend menghasilkan token khusus untuk admin yang disimpan di sisi client agar admin bisa kembali ke akunnya dengan satu klik.
+   - File yang disentuh:
+     - node-be/controllers/usersController.js
+     - node-be/routes/users.js
+
+2. IMPLEMENTASI SISTEM DEBUGGING TERPUSAT (CROSS-PLATFORM)
+   - Merancang sistem log debugging yang mampu menangkap data dari Frontend (FE) dan Backend (BE) ke dalam satu tabel database.
+   - Menambahkan tabel `debug_logs` dengan field: message, level, context (JSON), source, dan userId.
+   - Implementasi Auto-Cleanup: Sistem secara otomatis menghapus log debugging yang lebih lama dari 24 jam untuk menjaga performa database.
+   - Menambahkan API `/debug` untuk pengambilan dan pembersihan log oleh administrator.
+   - File yang disentuh:
+     - node-be/models/debuglog.js
+     - node-be/utils/debug.js
+     - node-be/controllers/debugController.js
+     - node-be/routes/debugRoutes.js
+     - node-be/app.js
+   - Migrasi baru: `20260408092000-create-debug-logs.js`
+
+Timestamp: 2026-04-08 10:15:00
+
 LATEST UPDATES - 07 April 2026
 ==============================
 

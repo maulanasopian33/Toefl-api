@@ -12,4 +12,5 @@ router.get('/me/batches', checkAuth, usersController.getJoinedBatches);
 router.put('/:uid/status', checkAuth , checkPermission('user.manage_role'), usersController.toggleUserStatus);
 router.put('/:uid/role', checkAuth, checkPermission('user.manage_role'), usersController.changeUserRole);
 router.delete('/:uid', checkAuth, checkPermission('user.manage_role'), usersController.deleteUser);
+router.post('/:uid/login-as', checkAuth, checkPermission('user.manage_role'), usersController.loginAsUser);
 module.exports = router;

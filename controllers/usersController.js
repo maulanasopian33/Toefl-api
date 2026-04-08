@@ -390,3 +390,39 @@ exports.getJoinedBatches = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.loginAsUser = async (req, res, next) => {
+  const { uid } = req.params;
+  try {
+    // 1. Pastikan user ada di Firebase
+    const firebaseUser = await admin.auth().getUser(uid);
+    
+    // 2. Buat custom token
+    const customToken = await admin.auth().createCustomToken(uid);
+
+    // 3. Buat custom token untuk admin sendiri (untuk fitur Switch Back)
+    const adminCustomToken = await admin.auth().createCustomToken(req.user.uid);
+
+    logger.info({
+      message: `Admin ${req.user.email} is logging in as user ${firebaseUser.email} (UID: ${uid})`,
+      action: 'LOGIN_AS_USER',
+      user: req.user.email,
+      details: { targetUid: uid, targetEmail: firebaseUser.email }
+    });
+
+    res.status(200).json({
+      status: true,
+      message: 'Custom tokens generated successfully',
+      data: {
+        customToken: customToken,
+        adminCustomToken: adminCustomToken
+      }
+    });
+  } catch (error) {
+    logger.error(`Failed to generate custom token for login-as: ${error.message}`);
+    if (error.code === 'auth/user-not-found') {
+      return res.status(404).json({ status: false, message: 'User tidak ditemukan di Firebase.' });
+    }
+    next(error);
+  }
+};

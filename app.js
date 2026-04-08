@@ -34,6 +34,7 @@ const reportRoutes = require('./routes/reportRoutes');
 const cacheRoutes = require('./routes/cacheRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const docsRoutes = require('./routes/docsRoutes');
+const debugRoutes = require('./routes/debugRoutes');
 
 
 
@@ -127,6 +128,7 @@ app.use('/certificates', certificateRoutes);
 app.use('/reports', reportRoutes);
 app.use('/analytics', analyticsRoutes);
 app.use('/docs', docsRoutes);
+app.use('/debug', debugRoutes);
 app.use('/logs', logRoutes);
 // Middleware untuk menangani route yang tidak ditemukan (404 Not Found)
 app.use((req, res, next) => {

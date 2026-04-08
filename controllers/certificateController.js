@@ -6,12 +6,12 @@ const fs                  = require('fs');
 const path                = require('path');
 const { logger }          = require('../utils/logger');
 const storageUtil         = require('../utils/storage');
-const { getCache, setCache, deleteCache } = require('../services/cache.service');
+const { getCache, setCache, deleteCache, clearByPattern } = require('../services/cache.service');
 const certService         = require('../services/certificateService');
 const archiver            = require('archiver');
 
 const CERT_CACHE_KEY_ALL    = 'cert:list:all';
-const CERT_CACHE_KEY_DETAIL = (id) => `cert:detail:${id}`;
+const RESULT_CACHE_PATTERN  = 'result:*';
 const CACHE_TTL             = 300; // 5 menit
 
 // =============================================================================
@@ -40,7 +40,10 @@ exports.generateForParticipant = async (req, res, next) => {
     });
 
     // Invalidasi cache list
-    await deleteCache(CERT_CACHE_KEY_ALL);
+    await Promise.all([
+      deleteCache(CERT_CACHE_KEY_ALL),
+      clearByPattern(RESULT_CACHE_PATTERN)
+    ]);
 
     res.status(200).json({
       status  : true,
@@ -85,7 +88,10 @@ exports.generateForBatch = async (req, res, next) => {
     });
 
     // Invalidasi cache list
-    await deleteCache(CERT_CACHE_KEY_ALL);
+    await Promise.all([
+      deleteCache(CERT_CACHE_KEY_ALL),
+      clearByPattern(RESULT_CACHE_PATTERN)
+    ]);
 
     const successCount = outcomes.filter(o => o.success).length;
     const failCount    = outcomes.filter(o => !o.success).length;
@@ -516,7 +522,7 @@ exports.deleteCertificate = async (req, res, next) => {
     // Invalidasi cache
     await Promise.all([
       deleteCache(CERT_CACHE_KEY_ALL),
-      deleteCache(CERT_CACHE_KEY_DETAIL(id))
+      clearByPattern(RESULT_CACHE_PATTERN)
     ]);
 
     res.status(200).json({

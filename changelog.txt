@@ -1,3 +1,12 @@
+LATEST UPDATES - 08 April 2026 14:08:41
+==============================
+
+1. PERBAIKAN SIKLUS HIDUP SERTIFIKAT (CACHE)
+   - Implementasi invalidasi cache pada daftar kandidat (`result:*`) saat sertifikat dibuat atau dihapus.
+   - Memastikan data pada halaman "Generate Sertifikat" selalu sinkron dengan kondisi database terbaru tanpa menunggu expired.
+
+Timestamp: 2026-04-08 14:08:41
+
 LATEST UPDATES - 08 April 2026 13:56:11
 ==============================
 

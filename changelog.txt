@@ -1,3 +1,24 @@
+LATEST UPDATES - 08 April 2026 13:56:11
+==============================
+
+1. PENINGKATAN MANAJEMEN PESERTA (ADMIN)
+   - Update endpoint `getUsers` untuk mendukung filter lengkap: Fakultas, Program Studi, Role, dan Status Verifikasi Email.
+   - Penambahan metadata pagination (`meta`) dan statistik ringkasan (`summary`) pada respon API.
+   - Implementasi pengambilan data filter options (Fakultas & Prodi) secara dinamis dari database.
+   - Optimasi query dengan dukungan pengurutan (`sortBy` & `sortOrder`).
+
+Timestamp: 2026-04-08 13:56:11
+
+LATEST UPDATES - 08 April 2026 13:48:33
+==============================
+
+1. PERBAIKAN DUPLIKASI SERTIFIKAT
+   - Implementasi logika deduplikasi pada list admin dan bulk download ZIP.
+   - Sistem kini hanya mengambil satu sertifikat terbaru (berdasarkan tanggal generate) untuk setiap kombinasi user dan batch.
+   - Menghindari adanya file ganda dengan nama yang sama di dalam paket ZIP.
+
+Timestamp: 2026-04-08 13:48:33
+
 LATEST UPDATES - 08 April 2026
 ==============================
 

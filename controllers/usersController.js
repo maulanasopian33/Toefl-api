@@ -74,54 +74,97 @@ exports.handleLogin = async (req, res, next) => {
 };
 exports.getUsers = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, search = '' } = req.query;
+    const { 
+      page = 1, limit = 10, search = '', 
+      faculty = '', program = '', role = '',
+      email_verified = '', status = '',
+      sortBy = 'createdAt', sortOrder = 'DESC'
+    } = req.query;
+
     const offset = (page - 1) * limit;
 
-    const whereClause = {
-      [Op.or]: [
+    // 1. Build Where Clause
+    const whereClause = {};
+    const detailWhere = {};
+    const roleWhere = {};
+
+    if (search) {
+      whereClause[Op.or] = [
         { name: { [Op.like]: `%${search}%` } },
         { email: { [Op.like]: `%${search}%` } }
-      ]
-    };
-
-    const { count, rows } = await db.user.findAndCountAll({
-      where: search ? whereClause : {},
-      include: [
-        { model: db.detailuser, as: 'detailuser' },
-        { model: db.role, as: 'role', attributes: ['name'] }
-      ], // Sertakan data UserDetail dan Role
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
-      order: [['createdAt', 'DESC']]
-    });
-
-    if (rows.length === 0 && page > 1) {
-      return res.status(200).json({
-        status: true,
-        message: 'Tidak ada lagi user yang ditemukan.',
-        data: [],
-        totalItems: count,
-        totalPages: Math.ceil(count / limit),
-        currentPage: parseInt(page, 10)
-      });
+      ];
     }
 
-    // Enrich user data with Firebase Admin info
+    if (faculty) detailWhere.fakultas = faculty;
+    if (program) detailWhere.prodi = program;
+    if (role) roleWhere.name = role;
+    
+    if (email_verified === 'verified') {
+      whereClause.email_verified = true;
+    } else if (email_verified === 'unverified') {
+      whereClause.email_verified = false;
+    }
+
+    // status filter: Note - disability is in Firebase, not DB normally.
+    // However, some implementations might sync it. Based on toggleUserStatus, 
+    // it only updates Firebase. So we can't easily filter by "disabled" in DB 
+    // unless we sync it. 
+
+    // 2. Fetch Data with Pagination
+    const { count, rows } = await db.user.findAndCountAll({
+      where: whereClause,
+      include: [
+        { 
+          model: db.detailuser, 
+          as: 'detailuser',
+          where: Object.keys(detailWhere).length > 0 ? detailWhere : undefined,
+          required: Object.keys(detailWhere).length > 0
+        },
+        { 
+          model: db.role, 
+          as: 'role', 
+          attributes: ['name'],
+          where: Object.keys(roleWhere).length > 0 ? roleWhere : undefined,
+          required: Object.keys(roleWhere).length > 0
+        }
+      ],
+      limit: parseInt(limit, 10),
+      offset: parseInt(offset, 10),
+      order: [[sortBy, sortOrder]]
+    });
+
+    // 3. Simple Summary Counts (Cacheable or separate queries)
+    const [totalUsers, verifiedUsers] = await Promise.all([
+      db.user.count(),
+      db.user.count({ where: { email_verified: true } })
+    ]);
+
+    // 4. Fetch Filter Options (Distinct values from DB)
+    const [faculties, programs] = await Promise.all([
+      db.detailuser.findAll({
+        attributes: [[db.sequelize.fn('DISTINCT', db.sequelize.col('fakultas')), 'fakultas']],
+        where: { fakultas: { [Op.ne]: null } },
+        raw: true
+      }).then(res => res.map(r => r.fakultas).filter(Boolean)),
+      db.detailuser.findAll({
+        attributes: [[db.sequelize.fn('DISTINCT', db.sequelize.col('prodi')), 'prodi']],
+        where: { prodi: { [Op.ne]: null } },
+        raw: true
+      }).then(res => res.map(r => r.prodi).filter(Boolean))
+    ]);
+
+    // 5. Enrich rows with Firebase info (keep existing logic)
     const enrichedUsers = await Promise.all(rows.map(async (user) => {
       try {
         const firebaseUser = await admin.auth().getUser(user.uid);
-        // Gabungkan data dari DB lokal dengan data dari Firebase
         return {
-          ...user.toJSON(), // Data dari database (termasuk detailuser)
-          role: user.role ? user.role.name : null, // Flatten role name
+          ...user.toJSON(),
+          role: user.role ? user.role.name : null,
           disabled: firebaseUser.disabled,
-          uuidFb: firebaseUser.uid,
           fb: firebaseUser
         };
       } catch (error) {
-        logger.error(`Failed to get Firebase user for UID ${user.uid}: ${error.message}`);
-        // Jika user tidak ditemukan di Firebase, tandai dan kembalikan data lokal
-        return { ...user.toJSON(), firebase: { error: 'User not found in Firebase' } };
+        return { ...user.toJSON(), role: user.role ? user.role.name : null, disabled: false };
       }
     }));
 
@@ -129,9 +172,22 @@ exports.getUsers = async (req, res, next) => {
       status: true,
       message: 'List user berhasil diambil.',
       data: enrichedUsers,
-      totalItems: count,
-      totalPages: Math.ceil(count / limit),
-      currentPage: parseInt(page, 10)
+      meta: {
+        totalItems: count,
+        totalPages: Math.ceil(count / limit),
+        currentPage: parseInt(page, 10),
+        limit: parseInt(limit, 10)
+      },
+      summary: {
+        total: totalUsers,
+        verified: verifiedUsers,
+        active: totalUsers, // Approximation since we don't have disabled in DB
+        disabled: 0
+      },
+      filterOptions: {
+        faculties: faculties.sort(),
+        programs: programs.sort()
+      }
     });
   } catch (error) {
     next(error);

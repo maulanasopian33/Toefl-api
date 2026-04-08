@@ -145,6 +145,19 @@ exports.getCertificates = async (req, res, next) => {
       ];
     }
 
+    // Deduplication: Only the latest certificate per user per batch
+    whereClause.id = {
+      [Op.in]: db.sequelize.literal(`(
+        SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER (
+            PARTITION BY userId, batchId 
+            ORDER BY createdAt DESC
+          ) as rn
+          FROM certificates
+        ) as ranked_certs WHERE rn = 1
+      )`)
+    };
+
     const { count, rows } = await db.certificate.findAndCountAll({
       where   : whereClause,
       limit   : parseInt(limit, 10),
@@ -384,6 +397,19 @@ exports.downloadAllZip = async (req, res, next) => {
         { event             : { [Op.like]: `%${search}%` } }
       ];
     }
+
+    // Deduplication: Only the latest certificate per user per batch
+    whereClause.id = {
+      [Op.in]: db.sequelize.literal(`(
+        SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER (
+            PARTITION BY userId, batchId 
+            ORDER BY createdAt DESC
+          ) as rn
+          FROM certificates
+        ) as ranked_certs WHERE rn = 1
+      )`)
+    };
 
     // 1. Ambil list sertifikat
     const certificates = await db.certificate.findAll({

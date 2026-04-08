@@ -8,6 +8,7 @@ const { logger }          = require('../utils/logger');
 const storageUtil         = require('../utils/storage');
 const { getCache, setCache, deleteCache } = require('../services/cache.service');
 const certService         = require('../services/certificateService');
+const archiver            = require('archiver');
 
 const CERT_CACHE_KEY_ALL    = 'cert:list:all';
 const CERT_CACHE_KEY_DETAIL = (id) => `cert:detail:${id}`;
@@ -347,6 +348,106 @@ exports.downloadCertificate = async (req, res, next) => {
   } catch (error) {
     logger.error('[CertController] downloadCertificate exception:', error.message);
     next(error);
+  }
+};
+
+// =============================================================================
+// DOWNLOAD ALL ZIP — Stream Multiple PDFs into a ZIP archive
+// GET /certificates/download-all/zip
+// =============================================================================
+
+/**
+ * Download semua sertifikat (berdasarkan filter) dalam bentuk ZIP.
+ */
+exports.downloadAllZip = async (req, res, next) => {
+  try {
+    const {
+      search = '',
+      userId, batchId,
+      startDate, endDate
+    } = req.query;
+
+    const whereClause = {};
+    if (userId)  whereClause.userId  = userId;
+    if (batchId) whereClause.batchId = batchId;
+
+    if (startDate && endDate) {
+      whereClause.date = { [Op.between]: [startDate, endDate] };
+    } else if (startDate) {
+      whereClause.date = { [Op.gte]: startDate };
+    }
+
+    if (search) {
+      whereClause[Op.or] = [
+        { name              : { [Op.like]: `%${search}%` } },
+        { certificateNumber : { [Op.like]: `%${search}%` } },
+        { event             : { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    // 1. Ambil list sertifikat
+    const certificates = await db.certificate.findAll({
+      where: whereClause,
+      attributes: ['pdfUrl', 'certificateNumber', 'name']
+    });
+
+    if (certificates.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: 'Tidak ada sertifikat ditemukan untuk kriteria ini.'
+      });
+    }
+
+    // 2. Setup archiver
+    const archive = archiver('zip', {
+      zlib: { level: 9 } // Sets the compression level.
+    });
+
+    archive.on('error', (err) => {
+      logger.error('[CertController] Archiver error:', err.message);
+      throw err;
+    });
+
+    // 3. Set headers
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const fileName = `certificates-${timestamp}.zip`;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+    // 4. Pipe archive data to response
+    archive.pipe(res);
+
+    // 5. Tambahkan file ke archive
+    let addedCount = 0;
+    for (const cert of certificates) {
+      if (!cert.pdfUrl) continue;
+
+      const relativePath = storageUtil.getRelativePath(cert.pdfUrl);
+      const absolutePath = storageUtil.resolvePath(relativePath);
+
+      if (fs.existsSync(absolutePath)) {
+        // Gunakan nama file yang deskriptif di dalam zip
+        // Format: [Nama] - [NomorSertifikat].pdf
+        const internalFileName = `${cert.name.replace(/[/\\?%*:|"<>]/g, '_')} - ${cert.certificateNumber}.pdf`;
+        archive.file(absolutePath, { name: internalFileName });
+        addedCount++;
+      }
+    }
+
+    if (addedCount === 0) {
+      // Jika tidak ada file fisik, kirim error (agak telat tapi aman)
+      return res.status(404).json({ status: false, message: 'File fisik PDF tidak ditemukan untuk semua record.' });
+    }
+
+    // 6. Finalize
+    await archive.finalize();
+    logger.info(`[CertController] ZIP Bulk Download: ${addedCount} files zipped.`);
+
+  } catch (error) {
+    logger.error('[CertController] downloadAllZip exception:', error.message);
+    if (!res.headersSent) {
+      next(error);
+    }
   }
 };
 

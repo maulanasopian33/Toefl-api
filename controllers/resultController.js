@@ -278,7 +278,6 @@ exports.getAnswersByAttemptId = async (req, res, next) => {
   }
 };
 
-
 /**
  * Mengambil daftar data kandidat/hasil tes dengan filtering, sorting, dan pagination (Admin).
  * Route: GET /admin/results/candidates
@@ -288,7 +287,7 @@ exports.getCandidates = async (req, res, next) => {
     const {
       search,
       batch_id,
-      status, // 'pending', 'generated'
+      status: statusFilter, // 'pending', 'generated'
       sort_by = 'date', // 'name', 'score', 'date'
       order = 'desc', // 'asc', 'desc'
       page = 1,
@@ -307,57 +306,40 @@ exports.getCandidates = async (req, res, next) => {
     const offset = (pageNum - 1) * limitNum;
 
     // Build Where Clause
-    const whereClause = {};
-    const includeUserClause = {};
-    const includeDetailUserClause = {};
-    const includeBatchClause = {};
+    const whereClause = {
+      // 1. HIGHEST SCORE ONLY PER USER (Requirement: Ambil nilai tertinggi saja)
+      id: {
+        [Op.in]: db.sequelize.literal(`(
+          SELECT id FROM (
+            SELECT id, ROW_NUMBER() OVER (
+              PARTITION BY userId 
+              ORDER BY score DESC, submittedAt DESC, id DESC
+            ) as rn
+            FROM userresults
+          ) as ranked_results WHERE rn = 1
+        )`)
+      }
+    };
 
-    // 1. Filter by Batch
+    // Filter by Batch
     if (batch_id) {
       whereClause.batchId = batch_id;
     }
 
-    // 2. HIGHEST SCORE ONLY PER USER (Requirement: Ambil nilai tertinggi saja)
-    // Filter results to only show the one with the highest score for each unique user
-    whereClause.id = {
-      [Op.in]: db.sequelize.literal(`(
-        SELECT id FROM (
-          SELECT id, ROW_NUMBER() OVER (
-            PARTITION BY userId 
-            ORDER BY score DESC, submittedAt DESC, id DESC
-          ) as rn
-          FROM userresults
-        ) as ranked_results WHERE rn = 1
-      )`)
-    };
-
-    // 2. Filter by Certificate/Result Status (pending vs generated)
-    // Asumsi: 'generated' jika sudah ada certificateId atau logic lain?
-    // User request: certificate status: pending, generated.
-    // Kita gunakan field yang mungkin relevan atau tambahkan logic.
-    // Jika tidak ada kolom certificateStatus di userresult, kita cek ketersediaan data sertifikat?
-    // Namun di sample response ada `certificateStatus: 'generated'`.
-    // Kita anggap field ini belum tentu ada di DB secara eksplisit, jadi kita bisa mock atau 
-    // jika userresult punya relasi ke certificates.
-    // Berdasarkan request, field "certificateStatus" ada di response, mungkin derived.
-    // Untuk filtering, kita cek apakah sudah di-generate sertifikatnya.
-    // Cek model `db.certificate`? Atau asumsi sementara status ada di userresult?
-    // Saya akan skip filter status level DB jika kolom tidak ada, dan handle di array filter (inefisien tapi aman)
-    // ATAU cek relasi. Mari kita asumsi filter ini dilakukan di query utama jika memungkinkan.
-    // Untuk amannya, saya join dengan tabel Certificates jika ada, atau cek logic bisnis.
-    // *Tapi* di `getResultsByBatch` tidak ada info certificate. 
-    // Mari kita lihat `certificateController` nanti jika perlu.
-    // SEMENTARA: Kita abaikan filter status di level DB query userresult kecuali ada kolomnya.
-    // Namun User minta filter.
-    // Mari kita cek models/index.js atau asumsi best effort.
-    
-    // 3. Search (Name or NIM)
+    const includeUserClause = {};
     if (search) {
       includeUserClause[Op.or] = [
         { name: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } },
         { '$detailuser.nim$': { [Op.like]: `%${search}%` } }
       ];
     }
+
+    const includeCertClause = {
+      model: db.certificate,
+      as: 'certificate',
+      required: statusFilter === 'generated'
+    };
 
     // Mapping Sort Field
     let orderClause = [];
@@ -376,6 +358,12 @@ exports.getCandidates = async (req, res, next) => {
         break;
     }
 
+    // Status filtering logic
+    if (statusFilter === 'pending') {
+      // Where certificate is NULL
+      whereClause['$certificate.id$'] = { [db.Sequelize.Op.is]: null };
+    }
+
     // Query Utama
     const { count, rows } = await db.userresult.findAndCountAll({
       where: whereClause,
@@ -384,58 +372,27 @@ exports.getCandidates = async (req, res, next) => {
           model: db.user,
           as: 'user',
           attributes: ['uid', 'name', 'email'],
-          where: (Object.keys(includeUserClause).length > 0 || Object.getOwnPropertySymbols(includeUserClause).length > 0) ? includeUserClause : undefined,
+          where: Object.keys(includeUserClause).length > 0 ? includeUserClause : undefined,
           include: [{
             model: db.detailuser,
             as: 'detailuser',
-            attributes: ['nim', 'namaLengkap', 'prodi'] // Ambil prodi juga
+            attributes: ['nim', 'namaLengkap', 'prodi']
           }]
         },
         {
           model: db.batch,
           as: 'batch',
-          attributes: ['idBatch', 'name', 'scoring_type'] // Ambil id untuk batchId
+          attributes: ['idBatch', 'name', 'scoring_type']
         },
-        // Join Certificate untuk cek status?
-        // Jika belum ada relasi define di model, kita manual check nanti atau use subquery.
-        // Kita coba include certificate jika ada relasinya.
-        // Jika tidak, kita skip filter status deep ini untuk sekarang dan note di implementation.
-        // TAPI User Request minta field "certificateStatus".
-        // Mari kita coba include model 'certificate' jika ada.
+        includeCertClause
       ],
       order: orderClause,
       limit: limitNum,
       offset: offset,
-      distinct: true // Penting untuk count yang akurat dengan include
+      distinct: true,
+      subQuery: false // Avoid issues with limit and joined tables filter
     });
 
-    // Aggregation for Summary (Separate Queries for performance/accuracy)
-    // Total Pending & Generated
-    // Kita butuh tau logika 'pending' vs 'generated'.
-    // Anggap: Generated jika ada record di tabel certificates untuk resultId ini.
-    // Kita akan query count certificate.
-    
-    // Untuk summary, kita hitung global (sesuai filter batch/search kah? Biasanya sesuai context halaman).
-    // User request: "summary": { "total_pending": 40, "total_generated": 60, "average_score": 520 }
-    // Ini sepertinya summary dari "current filter context" atau "global"? 
-    // Biasanya current filter context.
-    
-    // Hitung rata-rata score (filtered)
-    const avgScoreResult = await db.userresult.findOne({
-        where: whereClause,
-        attributes: [[db.sequelize.fn('AVG', db.sequelize.col('score')), 'avgScore']],
-        // Perlu include yang sama untuk search? Jika search aktif, avg score berubah? 
-        // Ya, biasanya summary mengikuti filter.
-        include: [
-            {
-                model: db.user, as: 'user',
-                where: (Object.keys(includeUserClause).length > 0 || Object.getOwnPropertySymbols(includeUserClause).length > 0) ? includeUserClause : undefined,
-                include: [{ model: db.detailuser, as: 'detailuser' }]
-            },
-           { model: db.batch, as: 'batch'}
-        ]
-    });
-    
     // Formatter
     const data = (await Promise.all(rows.map(async (row) => {
       // DEFENSIVE: Skip if user is missing (orphaned record)
@@ -444,15 +401,8 @@ exports.getCandidates = async (req, res, next) => {
         return null;
       }
 
-      // Cek certificate status
-      // Manual query ke certificate table kalau belum ada relasi
-      // const cert = await db.certificate.findOne({ where: { userResultId: row.id } });
-      // const status = cert ? 'generated' : 'pending';
-      // const certId = cert ? cert.id : null;
-      
-      // MOCK SEMENTARA KARENA MODEL CERTIFICATE BELUM DILIHAT/DIKETAHUI RELASINYA
-      const status = 'pending'; 
-      const certId = null;
+      const status = row.certificate ? 'generated' : 'pending';
+      const certId = row.certificate ? row.certificate.id : null;
 
       return {
         id: `res-${row.id}`,
@@ -468,13 +418,39 @@ exports.getCandidates = async (req, res, next) => {
         certificateId: certId
       };
     }))).filter(item => item !== null);
-    
-    // Apply Status Filter in Memory (fallback if SQL too complex without known schema)
-    // Jika status request 'generated', filter `data` array? NO, pagination akan rusak.
-    // Maka harus di SQL.
-    // Saya akan comment part filter status ini sebagai TODO: Implement Relation Check.
-    
-    // Final Response
+
+    // Summary logic (Filtered by current criteria but ignore pagination)
+    // For summary details, perform separate count for pending vs generated
+    const summaryWhere = { ...whereClause };
+    delete summaryWhere['$certificate.id$']; // remove status filter for base summary
+
+    // Base query for summary
+    const summaryDataPromise = db.userresult.findAll({
+      where: summaryWhere,
+      attributes: [
+        [db.sequelize.fn('COUNT', db.sequelize.col('userresult.id')), 'total_candidates'],
+        [db.sequelize.fn('AVG', db.sequelize.col('score')), 'avgScore']
+      ],
+      include: [
+        { model: db.user, as: 'user', where: Object.keys(includeUserClause).length > 0 ? includeUserClause : undefined, attributes: [], include: [{ model: db.detailuser, as: 'detailuser', attributes: [] }] },
+        { model: db.certificate, as: 'certificate', attributes: [] }
+      ],
+      raw: true
+    });
+
+    const totalGeneratedPromise = db.userresult.count({
+      where: summaryWhere,
+      include: [
+        { model: db.user, as: 'user', where: Object.keys(includeUserClause).length > 0 ? includeUserClause : undefined, attributes: [], include: [{ model: db.detailuser, as: 'detailuser', attributes: [] }] },
+        { model: db.certificate, as: 'certificate', attributes: [], required: true }
+      ]
+    });
+
+    const [summaryRes, totalGenerated] = await Promise.all([summaryDataPromise, totalGeneratedPromise]);
+    const summaryBase = summaryRes[0] || { total_candidates: 0, avgScore: 0 };
+    const totalCandidates = parseInt(summaryBase.total_candidates) || 0;
+    const totalGeneratedCount = totalGenerated || 0;
+
     const responseData = {
       data,
       meta: {
@@ -482,11 +458,10 @@ exports.getCandidates = async (req, res, next) => {
         page: pageNum,
         last_page: Math.ceil(count / limitNum),
         summary: {
-            total_pending: 0, 
-            total_generated: 0, 
-            average_score: (avgScoreResult && avgScoreResult.get('avgScore')) 
-                ? parseFloat(avgScoreResult.get('avgScore')).toFixed(2) 
-                : 0
+            total_pending: totalCandidates - totalGeneratedCount,
+            total_generated: totalGeneratedCount,
+            total_candidates: totalCandidates,
+            average_score: summaryBase.avgScore ? parseFloat(summaryBase.avgScore).toFixed(2) : 0
         }
       }
     };
@@ -499,6 +474,7 @@ exports.getCandidates = async (req, res, next) => {
     next(error);
   }
 };
+
 
 /**
  * Menghitung ulang semua hasil tes untuk satu batch (Admin).

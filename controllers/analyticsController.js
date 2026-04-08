@@ -77,9 +77,15 @@ exports.getParticipantResults = async (req, res, next) => {
       const { count, rows } = await userresult.findAndCountAll(queryOptions);
       
       const formattedRows = await Promise.all(rows.map(async (row) => {
-        const sectionScores = await getSectionScores(row.user.uid, row.batch.idBatch, row.batch.scoring_type, row.batch.scoring_config);
+        // Use persisted section_scores if available, otherwise recalculate
+        let sectionScores = row.section_scores;
+        if (!sectionScores || Object.keys(sectionScores).length === 0) {
+          sectionScores = await getSectionScores(row.user.uid, row.batch.idBatch, row.batch.scoring_type, row.batch.scoring_config);
+        }
+        
         const data = row.toJSON();
         data.sectionScores = sectionScores;
+        // correctCount and wrongCount are already in row.toJSON() but we ensure they are highlighted
         return data;
       }));
 

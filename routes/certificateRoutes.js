@@ -29,6 +29,11 @@ router.use(checkAuth);
 router.get('/my/:userResultId', controller.getCertificateByUserResult);
 
 /**
+ * Download ZIP (Bulk)
+ */
+router.get('/download-all/zip', checkRole(['admin']), controller.downloadAllZip);
+
+/**
  * Download file PDF sertifikat (pemilik atau admin).
  * GET /certificates/download/:id
  */

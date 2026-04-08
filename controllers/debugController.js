@@ -18,19 +18,38 @@ exports.getDebugLogs = async (req, res, next) => {
       whereClause.source = source;
     }
 
+    // Step 1: Ambil debug logs TANPA JOIN ke tabel users
+    // (menghindari error collation mismatch antar tabel di production)
     const { count, rows } = await db.debuglog.findAndCountAll({
       where: whereClause,
-      include: [
-        { model: db.user, as: 'user', attributes: ['name', 'email'] }
-      ],
       limit: parseInt(limit, 10),
       offset: parseInt(offset, 10),
       order: [['createdAt', 'DESC']]
     });
 
+    // Step 2: Ambil data user secara terpisah
+    const userIds = [...new Set(rows.map(r => r.userId).filter(Boolean))];
+    let userMap = {};
+    
+    if (userIds.length > 0) {
+      const users = await db.user.findAll({
+        where: { uid: userIds },
+        attributes: ['uid', 'name', 'email']
+      });
+      users.forEach(u => {
+        userMap[u.uid] = u;
+      });
+    }
+
+    // Step 3: Gabungkan data di application layer
+    const debugLogs = rows.map(log => ({
+      ...log.toJSON(),
+      user: userMap[log.userId] || null
+    }));
+
     res.status(200).json({
       status: true,
-      data: rows,
+      data: debugLogs,
       totalItems: count,
       totalPages: Math.ceil(count / limit),
       currentPage: parseInt(page, 10)

@@ -14,6 +14,7 @@ LATEST UPDATES - 08 April 2026
    - Merancang sistem log debugging yang mampu menangkap data dari Frontend (FE) dan Backend (BE) ke dalam satu tabel database.
    - Menambahkan tabel `debug_logs` dengan field: message, level, context (JSON), source, dan userId.
    - Implementasi Auto-Cleanup: Sistem secara otomatis menghapus log debugging yang lebih lama dari 24 jam untuk menjaga performa database.
+   - BUGFIX: Memperbaiki error `Illegal mix of collations` saat mengakses dashboard debug log dengan menyesuaikan collation tabel `debug_logs` ke `utf8mb4_general_ci` agar cocok dengan tabel users.
    - Menambahkan API `/debug` untuk pengambilan dan pembersihan log oleh administrator.
    - File yang disentuh:
      - node-be/models/debuglog.js

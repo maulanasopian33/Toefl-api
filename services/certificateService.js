@@ -107,9 +107,52 @@ function resolveValue(sourcePath, ctx) {
   return val !== undefined && val !== null ? val : '';
 }
 
-// =============================================================================
-// HELPER: Build userData dari mapping_data + data context
-// =============================================================================
+/**
+ * Helper to find a section score by keyword or name.
+ * Handles cases where the mapping uses 'Listening' but the DB has 'Listening Comprehension'.
+ */
+function findSectionScore(targetKey, sectionScores) {
+  const normTarget = normalizeKey(targetKey);
+  
+  // 1. Try exact match (normalized)
+  if (sectionScores[normTarget] !== undefined) {
+    return sectionScores[normTarget];
+  }
+
+  // 2. Try keyword-based matching (consistent with scoring engine)
+  const matchers = [
+    { category: 'listening', regex: /(listen|dengar|istima|audio|suara|percakapan|fahmul\s?masmu|muhadatsah)/i },
+    { category: 'reading', regex: /(read|baca|qira|teks|wacana|pemahaman|comprehension|fahmul\s?maqru)/i },
+    { category: 'structure', regex: /(struct|grammar|tata|tarakib|tata\s?bahasa|tulis|write|expression|qawaid|nahwu|sharaf)/i }
+  ];
+
+  // Map common labels to categories
+  const categoryMap = {
+    'listening': 'listening',
+    'listening comprehension': 'listening',
+    'reading': 'reading',
+    'reading comprehension': 'reading',
+    'structure': 'structure',
+    'grammar': 'structure',
+    'expression': 'structure'
+  };
+
+  const category = categoryMap[normTarget] || normTarget;
+  const matcher = matchers.find(m => m.category === category);
+
+  if (matcher) {
+    for (const [name, score] of Object.entries(sectionScores)) {
+      if (matcher.regex.test(name)) return score;
+    }
+  }
+
+  // 3. Check if targetKey is a substring of any section name or vice versa
+  for (const [name, score] of Object.entries(sectionScores)) {
+    if (name.includes(normTarget) || normTarget.includes(name)) return score;
+  }
+
+  return undefined;
+}
 
 /**
  * Build userData object untuk dikirim ke nexaplot engine.
@@ -124,12 +167,11 @@ function buildUserData(mappingData, ctx) {
   if (!Array.isArray(mappingData)) return userData;
 
   for (const mapping of mappingData) {
-    const { variable, source, type } = mapping;
+    const { variable, source } = mapping;
     if (!variable || !source) continue;
 
     // Special case 1: "section_scores_table" → array of { section, score } untuk tipe table
     if (source === 'section_scores_table') {
-      // ctx.section_scores sudah di-normalize menjadi flat { namaSection: number }
       const sectionScores = ctx.section_scores || {};
       userData[variable] = Object.entries(sectionScores).map(([section, score]) => ({
         section,
@@ -138,11 +180,10 @@ function buildUserData(mappingData, ctx) {
     }
     // Special case 2: "section_score.<NamaSection>" → nilai konversi section tertentu
     else if (source.startsWith('section_score.')) {
-      const targetSection = normalizeKey(source.slice('section_score.'.length));
-      const sectionScores = ctx.section_scores || {}; // Keys are already normalized by normalizeSectionScores
+      const targetSection = source.slice('section_score.'.length);
+      const sectionScores = ctx.section_scores || {}; 
       
-      // Lookup normalized key
-      const score = sectionScores[targetSection];
+      const score = findSectionScore(targetSection, sectionScores);
       userData[variable] = score !== undefined ? score : 0;
     } else {
       userData[variable] = resolveValue(source, ctx);

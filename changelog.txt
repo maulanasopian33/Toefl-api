@@ -1,8 +1,15 @@
-
 LATEST UPDATES - 08 April 2026
 ==============================
 
-1. IMPLEMENTASI FITUR LOGIN AS USER & SWITCH BACK
+2. FIX NILAI SECTION KOSONG DI SERTIFIKAT
+   - Memperbaiki masalah nilai1, nilai2, nilai3 yang selalu 0 pada sertifikat.
+   - Implementasi "Keyword-based Matching" di certificateService.js.
+   - Sekarang mapping 'section_score.Listening' dapat mencocokkan nama section yang bervariasi seperti 'Listening Comprehension' atau 'Istima'.
+   - Menambahkan helper findSectionScore untuk pencocokan yang lebih fleksibel.
+
+Timestamp: 2026-04-08 10:35:00
+
+3. IMPLEMENTASI FITUR LOGIN AS USER & SWITCH BACK
    - Menambahkan endpoint `POST /users/:uid/login-as` untuk memungkinkan admin masuk sebagai pengguna tertentu.
    - Menggunakan Firebase Custom Token untuk otentikasi aman tanpa memerlukan password pengguna.
    - Implementasi Fitur "Switch Back": Backend menghasilkan token khusus untuk admin yang disimpan di sisi client agar admin bisa kembali ke akunnya dengan satu klik.
@@ -10,7 +17,7 @@ LATEST UPDATES - 08 April 2026
      - node-be/controllers/usersController.js
      - node-be/routes/users.js
 
-2. IMPLEMENTASI SISTEM DEBUGGING TERPUSAT (CROSS-PLATFORM)
+4. IMPLEMENTASI SISTEM DEBUGGING TERPUSAT (CROSS-PLATFORM)
    - Merancang sistem log debugging yang mampu menangkap data dari Frontend (FE) dan Backend (BE) ke dalam satu tabel database.
    - Menambahkan tabel `debug_logs` dengan field: message, level, context (JSON), source, dan userId.
    - Implementasi Auto-Cleanup: Sistem secara otomatis menghapus log debugging yang lebih lama dari 24 jam untuk menjaga performa database.
@@ -24,7 +31,7 @@ LATEST UPDATES - 08 April 2026
      - node-be/app.js
    - Migrasi baru: `20260408092000-create-debug-logs.js`
 
-3. HOTFIX: COLLATION MISMATCH PADA DASHBOARD DEBUG (SEPARATE QUERY)
+5. HOTFIX: COLLATION MISMATCH PADA DASHBOARD DEBUG (SEPARATE QUERY)
    - BUGFIX: Mengatasi error `Illegal mix of collations` yang persisten pada server production saat mengakses API `/debug`.
    - Solusi: Menerapkan pendekatan "Separate Query" pada `debugController.js`, di mana data debug log dan data user diambil dalam dua kueri terpisah (menghindari SQL JOIN).
    - Strategi ini menjamin stabilitas query tanpa bergantung pada sinkronisasi collation manual di level database server.
@@ -89,6 +96,11 @@ LATEST UPDATES - 05 April 2026 (Part 2)
      Penyebab: Library `nexaplot` menggunakan format ES Module (ESM) yang menyebabkan konflik `require` di Node.js 22.
      Solusi: Migrasi pemanggilan library di `certificateService.js` menggunakan dynamic `import()`.
    - VERIFIKASI: Telah diuji dengan script diagnostik `test_fix_500.js` dan `test_cert_gen.js`.
+   - [x] Implement keyword-based matching in `certificateService.js`
+   - [x] Create verification script
+   - [x] Verify fix with various section name scenarios
+   - [x] Update `changelog.txt`
+   - [x] Create/Update `walkthrough.md`
 
 Timestamp: 2026-04-05 20:23:00
 

@@ -121,8 +121,8 @@ function findSectionScore(targetKey, sectionScores) {
 
   // 2. Try keyword-based matching (consistent with scoring engine)
   const matchers = [
-    { category: 'listening', regex: /(listen|dengar|istima|audio|suara|percakapan|fahmul\s?masmu|muhadatsah)/i },
-    { category: 'reading', regex: /(read|baca|qira|teks|wacana|pemahaman|comprehension|fahmul\s?maqru)/i },
+    { category: 'listening', regex: /(listen|dengar|istima|audio|suara|percakapan|masmu|muhadatsah)/i },
+    { category: 'reading', regex: /(read|baca|qira|teks|wacana|pemahaman|comprehension|maqru)/i },
     { category: 'structure', regex: /(struct|grammar|tata|tarakib|tata\s?bahasa|tulis|write|expression|qawaid|nahwu|sharaf)/i }
   ];
 
@@ -267,8 +267,17 @@ async function generateCertificate({ userResultId, templateFormatId = null }) {
 
   // Generate token unik dan nomor sertifikat
   const qrToken    = uuidv4();
-  const appUrl     = (process.env.APP_URL || '').replace(/\/+$/, '');
-  const verifyUrl  = `${appUrl}/verify/${qrToken}`;
+  
+  // CRITICAL: Ensure APP_URL is absolute for QR generation
+  let appUrl = (process.env.APP_URL || '').replace(/\/+$/, '');
+  if (!appUrl) {
+    logger.warn('[CertService] APP_URL is not set in .env. QR codes might not render correctly. Falling back to relative path.');
+    appUrl = '';
+  } else if (!appUrl.startsWith('http')) {
+    logger.warn(`[CertService] APP_URL "${appUrl}" does not start with http/https. QR codes might be invalid.`);
+  }
+
+  const verifyUrl  = appUrl ? `${appUrl}/verify/${qrToken}` : `/verify/${qrToken}`;
   const certNumber = `CERT-${userResult.batchId || 'BATCH'}-${userResultId}-${Date.now()}`;
 
   const ctx = {
@@ -336,10 +345,15 @@ async function generateCertificate({ userResultId, templateFormatId = null }) {
   const userData = buildUserData(mappingData, ctx);
 
   // Pastikan variabel QR selalu menggunakan verifyUrl yang baru di-generate
+  // Cari mapping yang sumbernya adalah certificate.verifyUrl atau bertipe 'qr'
   for (const mapping of mappingData) {
-    if (mapping.type === 'qr' || mapping.source === 'certificate.verifyUrl') {
+    const isQrMapping = mapping.type === 'qr' || 
+                       mapping.source === 'certificate.verifyUrl' || 
+                       mapping.variable?.toLowerCase() === 'qr';
+
+    if (isQrMapping) {
       userData[mapping.variable] = verifyUrl;
-      logger.info(`[CertService] Variable "${mapping.variable}" set to verifyUrl: ${verifyUrl}`);
+      logger.info(`[CertService] Variable "${mapping.variable}" forced to verifyUrl: ${verifyUrl}`);
     }
   }
 

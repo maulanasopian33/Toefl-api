@@ -121,9 +121,9 @@ function findSectionScore(targetKey, sectionScores) {
 
   // 2. Try keyword-based matching (consistent with scoring engine)
   const matchers = [
-    { category: 'listening', regex: /(listen|dengar|istima|audio|suara|percakapan|masmu|Masmū|muhadatsah)/i },
-    { category: 'reading', regex: /(read|baca|qira|teks|wacana|pemahaman|comprehension|maqru|Maqrū|Maqru)/i },
-    { category: 'structure', regex: /(struct|grammar|tata|tarakib|tata\s?bahasa|tulis|write|expression|qawa|qawaid|Qawaid|nahwu|sharaf)/i }
+    { category: 'listening', regex: /(listen|dengar|istima|audio|suara|percakapan|masmu|Masmū|masmū'|muhadatsah)/i },
+    { category: 'reading', regex: /(read|baca|qira|teks|wacana|pemahaman|comprehension|maqru|Maqrū|maqru'|Maqru|)/i },
+    { category: 'structure', regex: /(struct|grammar|tata|tarakib|tata\s?bahasa|tulis|write|expression|qawa|qawaid|qawā'id|Qawaid|nahwu|sharaf)/i }
   ];
 
   // Map common labels to categories

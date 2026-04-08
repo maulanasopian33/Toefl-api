@@ -12,6 +12,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       this.belongsTo(models.batch, { foreignKey: "batchId",targetKey: 'idBatch', as: "batch" });
       this.belongsTo(models.user, { foreignKey: "userId", targetKey: 'uid', as: 'user' });
+      this.hasOne(models.certificate, { foreignKey: 'userResultId', as: 'certificate' });
     }
   }
   userresult.init({

@@ -1,3 +1,12 @@
+LATEST UPDATES - 08 April 2026 14:36:28
+==============================
+
+1. PERBAIKAN ERROR RELASI MODEL (CERTIFICATE)
+   - Penambahan relasi `hasOne` pada `userresult` ke `certificate`.
+   - Mengatasi error "certificate is not associated to userresult" saat memuat daftar kandidat.
+
+Timestamp: 2026-04-08 14:36:28
+
 LATEST UPDATES - 08 April 2026 14:08:41
 ==============================
 

@@ -315,7 +315,7 @@ async function generateCertificate({ userResultId, templateFormatId = null }) {
   }
   const templateBuffer = fs.readFileSync(templatePath);
 
-  const { debugLog } = useDebug();
+  const { debugLog } = require('../utils/debug');
   await debugLog('User Data', { userData });
   await debugLog('Template Config', { templateConfig: format.nexaplot_config });
   await debugLog('Mapping Data', { mappingData });

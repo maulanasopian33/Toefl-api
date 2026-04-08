@@ -1,3 +1,12 @@
+LATEST UPDATES - 08 April 2026 14:46:41
+==============================
+
+1. PERBAIKAN KOLOM AMBIGU (SCORE)
+   - Spesifikasi tabel `userresult` pada kolom `score` dalam query SQL.
+   - Mengatasi error "Column 'score' in SELECT is ambiguous" saat pengurutan dan perhitungan rata-rata nilai.
+
+Timestamp: 2026-04-08 14:46:41
+
 LATEST UPDATES - 08 April 2026 14:36:28
 ==============================
 

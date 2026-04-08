@@ -350,7 +350,7 @@ exports.getCandidates = async (req, res, next) => {
         orderClause = [[{ model: db.user, as: 'user' }, 'name', sortDir]];
         break;
       case 'score':
-        orderClause = [['score', sortDir]];
+        orderClause = [[db.sequelize.col('userresult.score'), sortDir]];
         break;
       case 'date':
       default:
@@ -429,7 +429,7 @@ exports.getCandidates = async (req, res, next) => {
       where: summaryWhere,
       attributes: [
         [db.sequelize.fn('COUNT', db.sequelize.col('userresult.id')), 'total_candidates'],
-        [db.sequelize.fn('AVG', db.sequelize.col('score')), 'avgScore']
+        [db.sequelize.fn('AVG', db.sequelize.col('userresult.score')), 'avgScore']
       ],
       include: [
         { model: db.user, as: 'user', where: Object.keys(includeUserClause).length > 0 ? includeUserClause : undefined, attributes: [], include: [{ model: db.detailuser, as: 'detailuser', attributes: [] }] },
